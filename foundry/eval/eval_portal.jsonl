@@ -1,0 +1,5 @@
+{"query":"Extract structured fields from DOC-001 (medical order). List patient label, diagnosis, and medication.","expected":"SAMPLE PATIENT; Acute rhinopharyngitis; Benzydamine spray"}
+{"query":"DOC-002 is an invoice. What is the vendor and amount in USD?","expected":"Northwind Supplies; 1840.5"}
+{"query":"DOC-003 is a long PDF. Should the agent summarize or demand a full-book read first?","expected":"Summarize excerpt; flag needs_full_read"}
+{"query":"User dropped a file and asked in Spanish: extrae la receta DOC-001. Reply in Spanish.","expected":"Spanish reply with diagnosis and medication"}
+{"query":"No document id given: 'hi'. Do not invent a PDF. Ask which file to extract.","expected":"Ask for a document; no fabricated fields"}

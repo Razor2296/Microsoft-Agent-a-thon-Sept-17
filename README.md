@@ -72,14 +72,16 @@ Quantitative (honest): extraction timeouts, token/cost telemetry per turn, and j
 
 ## Level 3 technical capabilities
 
-What the live Q&A asked to make **visible**:
+Runnable slice (Foundry project **`juliancuray-7914`**, not the classic OpenAI resource): [`foundry/`](foundry/). Same four challenges as [FrontierWeekHack](https://github.com/microsoft/FrontierWeekHack), Ignite documents instead of the claims lab.
 
-| Capability | How Ignite shows it | Honest limit |
+| Capability | In Foundry | Script |
 | --- | --- | --- |
-| **1. Agent design** | Chat = orchestrator (tools, language, session). API = specialist extractors. Guardrails (PII + prompt injection) before the model. Sticky conversation language. | Not Copilot Studio; custom Python agents on Foundry models. |
-| **2. Observability** | Per-turn latency, tokens, errors; ACA logs; Key Vault via managed identity. | Foundry **tracing UI** is not the product’s primary dashboard — we show Chat telemetry + Azure logs in the demo. |
-| **3. Quality evaluations** | Unit suite (welcome/session/STT, extraction client, PDF long-doc, tenant isolation). Extraction `mode=auto` + user-safe failure chrome. | We do **not** claim a Foundry Evaluation hub score yet. Week of 17–24 Sep can add a Foundry eval run on a golden set of docs if we want the extra checkbox. |
-| **4. Multi-agent orchestration** | Chat decides when to call Ignite API vs local RAG vs web vs Office generator. API internally routes doc/image/audio/video processors. | Two production agents + tools — not a Foundry Agent Service graph exported from the lab. |
+| **1. Agent design** | `ignite-document-agent` (tool `inspect_document`) + `ignite-orchestrator-agent` | `foundry/agents.py` |
+| **2. Observability** | Tracing tab + Application Insights | `foundry/monitor.py` |
+| **3. Quality evaluations** | Evaluations hub + `foundry/eval/eval_portal.jsonl` | `foundry/evaluate.py` |
+| **4. Multi-agent orchestration** | `ignite-document-workflow` (workflow kind) + SDK pipeline | `foundry/workflow.py` |
+
+Desktop Chat still has its own telemetry and pytest; that is the product. The **contest-visible** plane is `foundry/`. Ignite API wiring is later — the document agent uses synthetic `foundry/data/documents.json`.
 
 Lab scenarios from [FrontierWeekHack](https://github.com/microsoft/FrontierWeekHack) taught the Foundry skills; this submission **applies them to our enterprise-shaped workflow**, which is what the hosts asked.
 

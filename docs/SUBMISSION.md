@@ -22,6 +22,21 @@ Rules: https://aka.ms/AgentathonRules
 | Demo video ~4 min | problem → live Chat+API → Foundry / ACA on screen |
 | Founderz form | category, description, repo URL, diagram, video |
 
+## Foundry slice (close Architect gaps)
+
+On project **juliancuray-7914** ([ai.azure.com/nextgen](https://ai.azure.com/nextgen)):
+
+```powershell
+cd foundry
+copy .env.example .env
+python agents.py
+python monitor.py
+python evaluate.py
+python workflow.py
+```
+
+Judges should see Agents, Tracing, Evaluations, and the workflow graph. Details: [foundry/README.md](../foundry/README.md).
+
 ## Demo script (speak this)
 
 1. “Level 3 Architect. Two agents on Azure: Ignite Chat orchestrates, Ignite API extracts, Foundry hosts the model.”  

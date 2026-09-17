@@ -1,0 +1,43 @@
+{
+  "documents": [
+    {
+      "doc_id": "DOC-001",
+      "kind": "medical_order",
+      "title": "Outpatient order — sample",
+      "pages": 2,
+      "fields": {
+        "patient": "SAMPLE PATIENT",
+        "diagnosis": "Acute rhinopharyngitis",
+        "medication": "Benzydamine spray 0.3%",
+        "completeness": 92,
+        "phi_redacted": true
+      }
+    },
+    {
+      "doc_id": "DOC-002",
+      "kind": "invoice",
+      "title": "Vendor invoice — sample",
+      "pages": 1,
+      "fields": {
+        "vendor": "Northwind Supplies",
+        "amount_usd": 1840.5,
+        "currency": "USD",
+        "due_date": "2026-10-01",
+        "completeness": 88,
+        "phi_redacted": true
+      }
+    },
+    {
+      "doc_id": "DOC-003",
+      "kind": "research_pdf",
+      "title": "Data storage architectures — sample excerpt",
+      "pages": 18,
+      "fields": {
+        "topic": "Evolution of data storage architectures",
+        "completeness": 70,
+        "needs_full_read": true,
+        "phi_redacted": true
+      }
+    }
+  ]
+}
