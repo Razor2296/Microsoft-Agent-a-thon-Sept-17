@@ -1,0 +1,16 @@
+project_name         = "ignitechat"
+environment          = "dev"
+reuse_existing_rg    = true
+resource_group_name  = "IgniteChat"
+# location is taken from the existing RG when reuse_existing_rg=true
+acr_login_server     = "myacr.azurecr.io"
+container_image      = "myacr.azurecr.io/ignitechat-api:latest"
+ignite_api_key       = "replace-with-strong-key"
+
+# Cost-safe defaults for first deploy
+container_cpu        = 1
+container_memory     = "2Gi"
+min_replicas         = 0
+max_replicas         = 1
+file_share_quota_gb  = 5
+log_retention_days   = 7

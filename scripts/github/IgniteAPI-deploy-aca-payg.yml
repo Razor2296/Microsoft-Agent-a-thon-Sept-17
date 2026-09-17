@@ -1,0 +1,77 @@
+# Copy to Razor2296/IgniteAPI as .github/workflows/deploy-aca.yml
+# Also copy scripts/github/IgniteAPI-ci/*.sh -> scripts/ci/ in IgniteAPI repo (see README-GITHUB-CI-PAYG.md).
+# Secrets: ACR_* (device login by default; optional AZURE_CREDENTIALS for SP).
+name: Deploy Ignite API ACA (PAYG)
+
+on:
+  push:
+    branches: [main]
+  workflow_dispatch:
+    inputs:
+      image_tag:
+        description: "ACR tag to deploy (default latest)"
+        required: false
+        default: latest
+
+permissions:
+  contents: read
+
+env:
+  ACR_LOGIN_SERVER: igniteapisiuacr.azurecr.io
+  IMAGE_NAME: ignite-api
+  CONTAINER_APP_NAME: ignite-api
+  RESOURCE_GROUP: IgniteAPI
+  KEY_VAULT_NAME: kvsecret2296siu
+  AZURE_SUBSCRIPTION_ID: 4a614b14-fa98-4088-b2ec-dd6e3cc593bd
+  AZURE_TENANT_ID: 19b73b1f-8603-4b51-ac82-5b17f03d2820
+  DEVICE_LOGIN_URL: https://microsoft.com/devicelogin
+  MFA_WAIT_SECONDS: "900"
+  IMAGE_TAG: ${{ github.event.inputs.image_tag || 'latest' }}
+
+jobs:
+  deploy-aca:
+    runs-on: ubuntu-latest
+    timeout-minutes: 45
+    steps:
+      - uses: actions/checkout@v4
+
+      # SIU MFA/passkey blocks UPN/password in Actions. Default: device code (you approve in browser).
+      # Optional later: AZURE_CREDENTIALS (service principal) for unattended deploy.
+      - name: Resolve Azure auth mode
+        id: auth
+        run: |
+          if [ -n "${{ secrets.AZURE_CREDENTIALS }}" ]; then
+            echo "mode=sp-json" >> "$GITHUB_OUTPUT"
+          else
+            echo "mode=device" >> "$GITHUB_OUTPUT"
+            echo "::notice title=Device login required::Open the Azure login step log, copy the code, visit https://microsoft.com/devicelogin (up to ${MFA_WAIT_SECONDS}s)."
+          fi
+
+      - name: Azure login
+        env:
+          AZURE_AUTH_MODE: ${{ steps.auth.outputs.mode }}
+          AZURE_CREDENTIALS: ${{ secrets.AZURE_CREDENTIALS }}
+          DEVICE_LOGIN_URL: ${{ env.DEVICE_LOGIN_URL }}
+          MFA_WAIT_SECONDS: ${{ env.MFA_WAIT_SECONDS }}
+        run: |
+          chmod +x scripts/ci/*.sh
+          bash scripts/ci/azure-login-gh.sh
+
+      - name: Deploy ignite-api Container App
+        env:
+          ACR_USERNAME: ${{ secrets.ACR_USERNAME }}
+          ACR_PASSWORD: ${{ secrets.ACR_PASSWORD }}
+          GITHUB_SHA: ${{ github.sha }}
+          IMAGE_TAG: ${{ env.IMAGE_TAG }}
+        run: bash scripts/ci/deploy-ignite-api-aca.sh
+
+      - name: Summary
+        run: |
+          az account set --subscription "${AZURE_SUBSCRIPTION_ID}"
+          FQDN=$(az containerapp show -g "${RESOURCE_GROUP}" -n "${CONTAINER_APP_NAME}" --query "properties.configuration.ingress.fqdn" -o tsv)
+          {
+            echo "### ignite-api PAYG (main merge)"
+            echo "- Image: \`${{ env.ACR_LOGIN_SERVER }}/${{ env.IMAGE_NAME }}:${{ env.IMAGE_TAG }}\`"
+            echo "- URL: https://${FQDN}"
+            echo "- Health: https://${FQDN}/health"
+          } >> "$GITHUB_STEP_SUMMARY"

@@ -1,0 +1,48 @@
+name: Ignite Chat Checks
+
+# PR check #1 (with build-windows-installer). Merge to main → deploy-aca.yml only.
+on:
+  pull_request:
+    branches: [main, Develop]
+    paths:
+      - "app/**"
+      - "scripts/ci/**"
+      - ".github/workflows/ci.yml"
+      - ".github/workflows/deploy-aca.yml"
+      - ".github/workflows/build-acr.yml"
+      - ".github/workflows/build-windows-installer.yml"
+
+permissions:
+  contents: read
+
+jobs:
+  ignitechat-ruff-pytest:
+    name: Ignite Chat — Ruff & Pytest
+    runs-on: ubuntu-latest
+    defaults:
+      run:
+        working-directory: app
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+
+      - name: Install dependencies
+        run: |
+          python -m pip install --upgrade pip
+          pip install -r requirements-server.txt
+          pip install ruff pytest pytest-mock
+
+      - name: Ruff lint (P2 isolation surface)
+        run: |
+          ruff check server/session_store.py backend/core/runtime_identity.py backend/integrations/office_extract.py
+
+      - name: Unit tests
+        env:
+          PYTHONPATH: .
+        run: python -m pytest tests/unit/ -q --tb=short

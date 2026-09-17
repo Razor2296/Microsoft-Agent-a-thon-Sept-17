@@ -1,0 +1,943 @@
+<!DOCTYPE html>
+<html lang="en">
+
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-width=1.0">
+    <title>IgniteChat 🤖</title>
+    <link rel="icon"
+        href="data:image/svg+xml,<svg xmlns=%22http://www.w3.org/2000/svg%22 viewBox=%220 0 100 100%22><text y=%22.9em%22 font-size=%2280%22>🤖</text></svg>">
+    <link rel="stylesheet" href="css/variables.css">
+    <link rel="stylesheet" href="css/base.css">
+    <link rel="stylesheet" href="css/sidebar.css">
+    <link rel="stylesheet" href="css/chat.css">
+    <link rel="stylesheet" href="css/input.css">
+    <!-- Markdown renderer (+ optional syntax highlight; gated in JS if load fails) -->
+    <script src="https://cdn.jsdelivr.net/npm/marked/marked.min.js" defer></script>
+    <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/highlight.js@11.9.0/styles/github-dark.min.css">
+    <script src="https://cdn.jsdelivr.net/npm/highlight.js@11.9.0/highlight.min.js" defer></script>
+</head>
+
+<body>
+    <!-- Global SVG gradients definitions container (required for Gemini colorful gradient SVG logo reference) -->
+    <svg style="position: absolute; width: 0; height: 0; overflow: hidden;" aria-hidden="true" version="1.1"
+        xmlns="http://www.w3.org/2000/svg">
+        <defs>
+            <linearGradient gradientUnits="userSpaceOnUse" id="lobe-icons-gemini-0-_R_0_" x1="7" x2="11" y1="15.5"
+                y2="12">
+                <stop stop-color="#08B962"></stop>
+                <stop offset="1" stop-color="#08B962" stop-opacity="0"></stop>
+            </linearGradient>
+            <linearGradient gradientUnits="userSpaceOnUse" id="lobe-icons-gemini-1-_R_0_" x1="8" x2="11.5" y1="5.5"
+                y2="11">
+                <stop stop-color="#F94543"></stop>
+                <stop offset="1" stop-color="#F94543" stop-opacity="0"></stop>
+            </linearGradient>
+            <linearGradient gradientUnits="userSpaceOnUse" id="lobe-icons-gemini-2-_R_0_" x1="3.5" x2="17.5" y1="13.5"
+                y2="12">
+                <stop stop-color="#FABC12"></stop>
+                <stop offset=".46" stop-color="#FABC12" stop-opacity="0"></stop>
+            </linearGradient>
+        </defs>
+    </svg>
+    <div id="app-container">
+        <!-- Left Rail -->
+        <div id="left-rail">
+            <div class="rail-top">
+                <button class="rail-btn active" id="rail-chats-btn" title="Chats">
+                    <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="currentColor" width="20"
+                        height="20">
+                        <path
+                            d="M12 2C6.477 2 2 6.03 2 11c0 2.27 1.012 4.335 2.686 5.882-.208.832-.693 2.155-1.503 3.003-.131.137-.156.347-.062.51.094.163.268.263.457.248 2.228-.17 4.148-.962 5.092-1.42A9.972 9.972 0 0 0 12 20c5.523 0 10-4.03 10-9s-4.477-9-10-9z" />
+                    </svg>
+                    <span id="notification-badge" class="badge">0</span>
+                </button>
+                <button class="rail-btn" id="rail-calls-btn" title="Calls">
+                    <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="currentColor" width="20"
+                        height="20">
+                        <path
+                            d="M6.62 10.79a15.15 15.15 0 0 0 6.59 6.59l2.2-2.2a1 1 0 0 1 1.11-.27 11.36 11.36 0 0 0 3.58.57 1 1 0 0 1 1 1V20a1 1 0 0 1-1 1A17 17 0 0 1 3 4a1 1 0 0 1 1-1h3.5a1 1 0 0 1 1 1 11.36 11.36 0 0 0 .57 3.58 1 1 0 0 1-.27 1.11z" />
+                    </svg>
+                </button>
+                <button class="rail-btn" id="rail-status-btn" title="Status">
+                    <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor"
+                        stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round" width="20" height="20">
+                        <path d="M12 2a10 10 0 1 0 10 10" />
+                    </svg>
+                </button>
+                <button class="rail-btn" id="rail-channels-btn" title="Channels">
+                    <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor"
+                        stroke-width="2" stroke-linecap="round" stroke-linejoin="round" width="20" height="20">
+                        <path d="M21 15a2 2 0 0 1-2 2H7l-4 4V5a2 2 0 0 1 2-2h14a2 2 0 0 1 2 2z"></path>
+                    </svg>
+                </button>
+                <button class="rail-btn" id="rail-communities-btn" title="Communities">
+                    <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="currentColor" width="20"
+                        height="20">
+                        <path
+                            d="M16 11c1.66 0 2.99-1.34 2.99-3S17.66 5 16 5c-1.66 0-3 1.34-3 3s1.34 3 3 3zm-8 0c1.66 0 2.99-1.34 2.99-3S9.66 5 8 5C6.34 5 5 6.34 5 8s1.34 3 3 3zm0 2c-2.33 0-7 1.17-7 3.5V19h14v-2.5c0-2.33-4.67-3.5-7-3.5zm8 0c-.29 0-.62.02-.97.05 1.16.84 1.97 1.97 1.97 3.45V19h6v-2.5c0-2.33-4.67-3.5-7-3.5z" />
+                    </svg>
+                </button>
+            </div>
+            <div class="rail-bottom">
+                <button class="rail-btn" id="rail-roi-btn" title="Productividad & ROI" style="margin-bottom: 8px;">
+                    <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor"
+                        stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round" width="20" height="20">
+                        <line x1="18" y1="20" x2="18" y2="10"></line>
+                        <line x1="12" y1="20" x2="12" y2="4"></line>
+                        <line x1="6" y1="20" x2="6" y2="14"></line>
+                    </svg>
+                </button>
+                <button class="rail-btn" id="rail-archived-btn" title="Archived" style="margin-bottom: 8px;">
+                    <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor"
+                        stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round" width="20" height="20">
+                        <polyline points="21 8 21 21 3 21 3 8"></polyline>
+                        <rect x="1" y="3" width="22" height="5"></rect>
+                        <line x1="10" y1="12" x2="14" y2="12"></line>
+                    </svg>
+                </button>
+                <button class="rail-btn" id="rail-settings-btn" title="Settings">
+                    <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="currentColor" width="20"
+                        height="20">
+                        <path
+                            d="M19.14 12.94c.04-.3.06-.61.06-.94 0-.32-.02-.64-.07-.94l2.03-1.58a.49.49 0 0 0 .12-.61l-1.92-3.32a.488.488 0 0 0-.59-.22l-2.39.96c-.5-.38-1.03-.7-1.62-.94l-.36-2.54a.484.484 0 0 0-.48-.41h-3.84a.483.483 0 0 0-.48.41l-.36 2.54c-.59.24-1.13.57-1.62.94l-2.39-.96a.488.488 0 0 0-.59.22L2.74 8.87a.49.49 0 0 0 .12.61l2.03 1.58c-.05.3-.09.63-.09.94s.02.64.07.94l-2.03 1.58a.49.49 0 0 0-.12.61l1.92 3.32c.12.22.37.29.59.22l2.39-.96c.5.38 1.03.7 1.62.94l.36 2.54c.05.24.24.41.48.41h3.84c.24 0 .44-.17.48-.41l.36-2.54c.59-.24 1.13-.56 1.62-.94l2.39.96c.22.08.47 0 .59-.22l1.92-3.32a.49.49 0 0 0-.12-.61l-2.03-1.58zM12 15.6c-1.98 0-3.6-1.62-3.6-3.6s1.62-3.6 3.6-3.6 3.6 1.62 3.6 3.6-1.62 3.6-3.6 3.6z" />
+                    </svg>
+                </button>
+                <div class="rail-profile" id="rail-profile-avatar" title="Profile"></div>
+            </div>
+        </div>
+
+        <!-- Chats Sidebar Panel -->
+        <div id="chats-sidebar-panel">
+            <div id="chats-header"
+                style="display: flex; align-items: center; justify-content: space-between; padding: 10px 16px;">
+                <h2 style="margin: 0; font-size: 20px; font-weight: 700;">Chats</h2>
+                <div style="display: flex; align-items: center; gap: 8px;">
+                    <button id="new-group-btn" class="icon-btn" title="New Group">
+                        <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="currentColor" width="20"
+                            height="20">
+                            <path
+                                d="M15 12c2.21 0 4-1.79 4-4s-1.79-4-4-4-4 1.79-4 4 1.79 4 4 4zm-9-2V7H4v3H1v2h3v3h2v-3h3v-2H6zm9 4c-2.67 0-8 1.34-8 4v2h16v-2c0-2.66-5.33-4-8-4z" />
+                        </svg>
+                    </button>
+                    <button id="collapse-chats-btn" class="icon-btn" title="Collapse Chats"
+                        style="margin-left: 4px;">&laquo;</button>
+                </div>
+            </div>
+
+            <div id="search-container">
+                <div class="search-wrapper">
+                    <span class="search-icon">🔍</span>
+                    <input type="text" id="chats-search-input" placeholder="Search or start a new chat">
+                </div>
+            </div>
+
+            <div id="filters-container">
+                <button class="filter-chip active" id="filter-all">All</button>
+                <button class="filter-chip" id="filter-unread">Unread</button>
+            </div>
+
+            <div class="chats-list" id="chats-list">
+                <!-- Chats list will be rendered dynamically by JavaScript -->
+            </div>
+
+            <!--
+                <div class="chat-item" data-provider="AlibabaCloud" onclick="selectProvider('AlibabaCloud')">
+                    <input type="radio" name="provider" value="AlibabaCloud" id="radio-AlibabaCloud" style="display:none;">
+                    <div class="provider-avatar" id="sidebar-avatar-AlibabaCloud"></div>
+                    <div class="chat-item-details">
+                        <div class="chat-item-row">
+                            <span class="chat-item-name">Alibaba Cloud</span>
+                            <span class="chat-item-time" id="chat-item-time-AlibabaCloud"></span>
+                        </div>
+                        <div class="chat-item-row">
+                            <span class="chat-item-last-msg" id="chat-item-last-msg-AlibabaCloud">Click to start chatting</span>
+                            <span class="provider-badge hidden" id="sidebar-badge-AlibabaCloud">0</span>
+                        </div>
+                    </div>
+                </div>
+                -->
+
+            <!-- Sidebar (Settings Drawer Overlay) -->
+            <div id="sidebar" class="hidden">
+                <div id="sidebar-header">
+                    <h2>⚙️ Settings</h2>
+                    <button id="close-sidebar" class="icon-btn">&larr;</button>
+                </div>
+
+                <div class="sidebar-section">
+                    <label for="language-select">Language</label>
+                    <select id="language-select">
+                        <option value="en">English</option>
+                        <option value="es">Español</option>
+                    </select>
+                </div>
+
+                <!-- AI Provider Selection — only visible in group chats -->
+                <div class="sidebar-section" id="group-provider-select-section" style="display:none;">
+                    <label for="group-provider-select" id="group-provider-select-label"
+                        style="font-weight:600; margin-bottom:10px; display:block;">🤖 AI Provider</label>
+                    <select id="group-provider-select"
+                        style="width:100%; border-radius:8px; padding:6px 10px; font-size:13px; background:var(--input-bg,#2a2f32); color:var(--text-primary,#e9edef); border:1px solid var(--border-color,#3b4a54); cursor:pointer;"></select>
+                </div>
+
+                <div class="sidebar-section">
+                    <label for="model-select">Choose Model <span class="help-icon">?</span></label>
+                    <select id="model-select"></select>
+                </div>
+
+                <hr class="sidebar-divider">
+
+                <div class="sidebar-section">
+                    <label class="appearance-label">🎨 Appearance</label>
+                    <div class="toggle-container">
+                        <label class="switch">
+                            <input type="checkbox" id="dark-mode-toggle" checked>
+                            <span class="slider round"></span>
+                        </label>
+                        <span class="toggle-text">Dark Mode</span>
+                    </div>
+                </div>
+
+                <hr class="sidebar-divider">
+
+                <div class="sidebar-section">
+                    <label class="tokens-label">📊 Total tokens used</label>
+                    <div id="total-tokens-display">0</div>
+                    <label class="cost-label" style="margin-top: 10px; display: block; font-size: 13px; font-weight: 600; color: var(--text-muted);">💵 Total estimated cost (USD)</label>
+                    <div id="total-cost-display" style="font-size: 18px; font-weight: 700; color: var(--accent-color, #10a37f);">$0.0000 USD</div>
+                    <div id="budget-remaining-wrap" style="display: none;">
+                        <label class="budget-remaining-label" style="margin-top: 10px; display: block; font-size: 13px; font-weight: 600; color: var(--text-muted);">💰 Estimated remaining</label>
+                        <div id="budget-remaining-display">$0.0000 USD</div>
+                        <div id="budget-remaining-hint" class="budget-remaining-hint">Based on your local budget, not live provider billing.</div>
+                    </div>
+                    <div id="powered-by-text" style="margin-top: 8px;">Powered by Gemini</div>
+                </div>
+
+                <div class="sidebar-section" style="margin-top: auto;">
+                    <button id="btn-open-setup-wizard" class="whatsapp-btn" style="width: 100%; margin-bottom: 8px; background: var(--hover-bg); border: 1px solid var(--border-color); color: var(--text-color); font-size: 13px; font-weight: 600; padding: 8px; border-radius: 8px; display: flex; align-items: center; justify-content: center; gap: 6px;">
+                        <span>⚡</span> Asistente de Configuración
+                    </button>
+                    <button id="clear-chat-btn">
+                        <span class="icon">🗑️</span> Clear conversation
+                    </button>
+                </div>
+            </div>
+        </div>
+
+        <!-- Main Chat Area -->
+        <div id="main-area">
+            <!-- Header -->
+            <div id="header">
+                <button id="toggle-sidebar" class="icon-btn">&raquo;</button>
+                <div class="header-avatar-container" id="header-avatar-container">
+                    <!-- Icon will be injected via JS -->
+                </div>
+                <div class="header-info">
+                    <h3 id="header-title">Gemini Assistant</h3>
+                    <span id="header-subtitle">Active now</span>
+                </div>
+                <div class="header-spacer"></div>
+                <button class="icon-btn" id="header-video-btn" title="Video call" style="margin-right: 8px;">
+                    <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="currentColor" width="20"
+                        height="20">
+                        <path
+                            d="M17 10.5V7c0-.55-.45-1-1-1H4c-.55 0-1 .45-1 1v10c0 .55.45 1 1 1h12c.55 0 1-.45 1-1v-3.5l4 4v-11l-4 4z" />
+                    </svg>
+                </button>
+                <button class="icon-btn" id="header-call-btn" title="Voice call" style="margin-right: 8px;">
+                    <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="currentColor" width="18"
+                        height="18">
+                        <path
+                            d="M6.62 10.79a15.15 15.15 0 0 0 6.59 6.59l2.2-2.2a1 1 0 0 1 1.11-.27 11.36 11.36 0 0 0 3.58.57 1 1 0 0 1 1 1V20a1 1 0 0 1-1 1A17 17 0 0 1 3 4a1 1 0 0 1 1-1h3.5a1 1 0 0 1 1 1 11.36 11.36 0 0 0 .57 3.58 1 1 0 0 1-.27 1.11z" />
+                    </svg>
+                </button>
+                <button id="header-search-btn" class="icon-btn" title="Search" style="margin-right: 8px;">
+                    <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor"
+                        stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round" width="18" height="18">
+                        <circle cx="11" cy="11" r="8"></circle>
+                        <line x1="21" y1="21" x2="16.65" y2="16.65"></line>
+                    </svg>
+                </button>
+                <button id="ai-grid-toggle" class="icon-btn" title="Panel view" style="margin-right: 8px; display: none;">
+                    <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor"
+                        stroke-width="2" stroke-linecap="round" stroke-linejoin="round" width="18" height="18">
+                        <rect x="3" y="3" width="7" height="7"></rect>
+                        <rect x="14" y="3" width="7" height="7"></rect>
+                        <rect x="3" y="14" width="7" height="7"></rect>
+                        <rect x="14" y="14" width="7" height="7"></rect>
+                    </svg>
+                </button>
+                <button id="menu-btn" class="icon-btn">⋮</button>
+
+                <!-- 3-Dots Dropdown Menu -->
+                <div id="header-menu-dropdown" class="dropdown-menu hidden">
+                    <div class="dropdown-item" id="menu-contact-info">
+                        <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor"
+                            stroke-width="2" stroke-linecap="round" stroke-linejoin="round" width="16" height="16">
+                            <circle cx="12" cy="12" r="10" />
+                            <line x1="12" y1="16" x2="12" y2="12" />
+                            <line x1="12" y1="8" x2="12.01" y2="8" />
+                        </svg>
+                        <span id="menu-contact-info-text">Contact info</span>
+                    </div>
+                    <div class="dropdown-item" id="menu-search">
+                        <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor"
+                            stroke-width="2" stroke-linecap="round" stroke-linejoin="round" width="16" height="16">
+                            <circle cx="11" cy="11" r="8" />
+                            <line x1="21" y1="21" x2="16.65" y2="16.65" />
+                        </svg>
+                        Search
+                    </div>
+                    <div class="dropdown-item" id="menu-summarize">
+                        <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor"
+                            stroke-width="2" stroke-linecap="round" stroke-linejoin="round" width="16" height="16">
+                            <rect x="3" y="3" width="18" height="18" rx="2" />
+                            <line x1="7" y1="8" x2="17" y2="8" />
+                            <line x1="7" y1="12" x2="17" y2="12" />
+                            <line x1="7" y1="16" x2="13" y2="16" />
+                        </svg>
+                        Summarize chat
+                    </div>
+                    <div class="dropdown-item" id="menu-export">
+                        <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor"
+                            stroke-width="2" stroke-linecap="round" stroke-linejoin="round" width="16" height="16">
+                            <path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4" />
+                            <polyline points="7 10 12 15 17 10" />
+                            <line x1="12" y1="15" x2="12" y2="3" />
+                        </svg>
+                        Export chat
+                    </div>
+                    <div class="dropdown-item" id="menu-select-messages">
+                        <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor"
+                            stroke-width="2" stroke-linecap="round" stroke-linejoin="round" width="16" height="16">
+                            <polyline points="9 11 12 14 22 4" />
+                            <path d="M21 12v7a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h11" />
+                        </svg>
+                        Select messages
+                    </div>
+                    <div class="dropdown-item" id="menu-wallpaper">
+                        <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor"
+                            stroke-width="2" stroke-linecap="round" stroke-linejoin="round" width="16" height="16">
+                            <rect x="3" y="3" width="18" height="18" rx="2" ry="2" />
+                            <circle cx="8.5" cy="8.5" r="1.5" />
+                            <polyline points="21 15 16 10 5 21" />
+                        </svg>
+                        Wallpaper
+                    </div>
+                    <div class="dropdown-item" id="menu-disappearing">
+                        <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor"
+                            stroke-width="2" stroke-linecap="round" stroke-linejoin="round" width="16" height="16">
+                            <circle cx="12" cy="12" r="10" />
+                            <polyline points="12 6 12 12 16 14" />
+                        </svg>
+                        Disappearing messages
+                    </div>
+                    <div class="dropdown-item" id="menu-favorites">
+                        <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor"
+                            stroke-width="2" stroke-linecap="round" stroke-linejoin="round" width="16" height="16">
+                            <polygon
+                                points="12 2 15.09 8.26 22 9.27 17 14.14 18.18 21.02 12 17.77 5.82 21.02 7 14.14 2 9.27 8.91 8.26 12 2" />
+                        </svg>
+                        ⭐ Starred messages
+                    </div>
+                    <div class="dropdown-item" id="menu-add-list">
+                        <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor"
+                            stroke-width="2" stroke-linecap="round" stroke-linejoin="round" width="16" height="16">
+                            <line x1="8" y1="6" x2="21" y2="6" />
+                            <line x1="8" y1="12" x2="21" y2="12" />
+                            <line x1="8" y1="18" x2="21" y2="18" />
+                            <line x1="3" y1="6" x2="3.01" y2="6" />
+                            <line x1="3" y1="12" x2="3.01" y2="12" />
+                            <line x1="3" y1="18" x2="3.01" y2="18" />
+                        </svg>
+                        📂 Archive chat
+                    </div>
+                    <div class="dropdown-item" id="menu-close">
+                        <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor"
+                            stroke-width="2" stroke-linecap="round" stroke-linejoin="round" width="16" height="16">
+                            <line x1="18" y1="6" x2="6" y2="18" />
+                            <line x1="6" y1="6" x2="18" y2="18" />
+                        </svg>
+                        Close chat
+                    </div>
+                    <div class="dropdown-divider" id="menu-divider-group-actions"></div>
+                    <div class="dropdown-item" id="menu-clear-chat">
+                        <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor"
+                            stroke-width="2" stroke-linecap="round" stroke-linejoin="round" width="16" height="16">
+                            <circle cx="12" cy="12" r="10" />
+                            <line x1="8" y1="12" x2="16" y2="12" />
+                        </svg>
+                        <span id="menu-clear-chat-text">Clear chat</span>
+                    </div>
+                    <div class="dropdown-item" id="menu-exit-group" style="display: none;">
+                        <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor"
+                            stroke-width="2" stroke-linecap="round" stroke-linejoin="round" width="16" height="16">
+                            <path d="M9 21H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h4" />
+                            <polyline points="16 17 21 12 16 7" />
+                            <line x1="21" y1="12" x2="9" y2="12" />
+                        </svg>
+                        <span id="menu-exit-group-text">Exit group</span>
+                    </div>
+                    <div class="dropdown-divider" id="menu-divider-calls"></div>
+                    <div class="dropdown-item" id="menu-call-link">
+                        <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor"
+                            stroke-width="2" stroke-linecap="round" stroke-linejoin="round" width="16" height="16">
+                            <path d="M10 13a5 5 0 0 0 7.54.54l3-3a5 5 0 0 0-7.07-7.07l-1.72 1.71" />
+                            <path d="M14 11a5 5 0 0 0-7.54-.54l-3 3a5 5 0 0 0 7.07 7.07l1.71-1.71" />
+                        </svg>
+                        Send call link
+                    </div>
+                    <div class="dropdown-item" id="menu-schedule">
+                        <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor"
+                            stroke-width="2" stroke-linecap="round" stroke-linejoin="round" width="16" height="16">
+                            <rect x="3" y="4" width="18" height="18" rx="2" ry="2" />
+                            <line x1="16" y1="2" x2="16" y2="6" />
+                            <line x1="8" y1="2" x2="8" y2="6" />
+                            <line x1="3" y1="10" x2="21" y2="10" />
+                        </svg>
+                        Schedule call
+                    </div>
+                    <div class="dropdown-item" id="menu-group-call">
+                        <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor"
+                            stroke-width="2" stroke-linecap="round" stroke-linejoin="round" width="16" height="16">
+                            <path d="M17 21v-2a4 4 0 0 0-4-4H5a4 4 0 0 0-4 4v2" />
+                            <circle cx="9" cy="7" r="4" />
+                            <path d="M23 21v-2a4 4 0 0 0-3-3.87" />
+                            <path d="M16 3.13a4 4 0 0 1 0 7.75" />
+                        </svg>
+                        New group call
+                    </div>
+                    <div class="dropdown-divider" id="menu-divider-reports"></div>
+                    <div class="dropdown-item" id="menu-report">
+                        <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor"
+                            stroke-width="2" stroke-linecap="round" stroke-linejoin="round" width="16" height="16">
+                            <path d="M4 15s1-1 4-1 5 2 8 2 4-1 4-1V3s-1 1-4 1-5-2-8-2-4 1-4 1z" />
+                            <line x1="4" y1="22" x2="4" y2="15" />
+                        </svg>
+                        Report
+                    </div>
+                    <div class="dropdown-item" id="menu-block">
+                        <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor"
+                            stroke-width="2" stroke-linecap="round" stroke-linejoin="round" width="16" height="16">
+                            <circle cx="12" cy="12" r="10" />
+                            <line x1="4.93" y1="4.93" x2="19.07" y2="19.07" />
+                        </svg>
+                        Block
+                    </div>
+                </div>
+            </div>
+
+            <!-- Message Search Bar -->
+            <div id="message-search-bar" class="hidden-search">
+                <div class="search-bar-inner">
+                    <svg class="search-icon" xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none"
+                        stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"
+                        width="16" height="16">
+                        <circle cx="11" cy="11" r="8"></circle>
+                        <line x1="21" y1="21" x2="16.65" y2="16.65"></line>
+                    </svg>
+                    <input type="text" id="message-search-input" placeholder="Search in this chat...">
+                    <span id="message-search-count" class="search-count-badge"></span>
+                    <div class="search-actions">
+                        <button id="message-search-prev" class="search-action-btn" title="Previous match">↑</button>
+                        <button id="message-search-next" class="search-action-btn" title="Next match">↓</button>
+                        <button id="message-search-close" class="search-action-btn"
+                            title="Close search">&times;</button>
+                    </div>
+                </div>
+            </div>
+
+            <div id="budget-alert-banner" class="budget-alert-banner hidden" role="status">
+                <span id="budget-alert-banner-text"></span>
+                <button type="button" id="budget-alert-banner-dismiss" aria-label="Dismiss">&times;</button>
+            </div>
+
+            <!-- Chat Messages (default WhatsApp thread) -->
+            <div id="chat-container">
+                <!-- Messages will be injected here via JS -->
+            </div>
+            <!-- Optional multi-panel grid for group chats (off by default) -->
+            <div id="ai-grid" class="hidden" aria-hidden="true"></div>
+
+            <!-- Input Area -->
+            <div id="input-container">
+                <!-- Emoji Picker (Moved to prevent clipping by overflow:hidden) -->
+                <div id="emoji-picker" class="hidden">
+                    <div class="emoji-picker-header">
+                        <input type="text" id="emoji-search" placeholder="Search emoji...">
+                    </div>
+                    <div class="emoji-picker-tabs">
+                        <span class="emoji-tab active" data-category="smileys">😊</span>
+                        <span class="emoji-tab" data-category="nature">🐻</span>
+                        <span class="emoji-tab" data-category="food">🍔</span>
+                        <span class="emoji-tab" data-category="activity">⚽</span>
+                        <span class="emoji-tab" data-category="travel">🚀</span>
+                        <span class="emoji-tab" data-category="symbols">💖</span>
+                    </div>
+                    <div class="emoji-picker-list" id="emoji-picker-list"></div>
+                </div>
+
+                <div class="input-card">
+                    <div id="attachments-preview"></div>
+                    <div class="input-wrapper-inner">
+                        <button id="attach-btn" class="icon-btn">+</button>
+                        <input type="file" id="file-input" style="display:none;" multiple>
+
+                        <div class="emoji-picker-container">
+                            <button id="emoji-btn" class="icon-btn" title="Emoji">
+                                <svg viewBox="0 0 24 24" width="22" height="22" fill="currentColor">
+                                    <path
+                                        d="M12 2C6.48 2 2 6.48 2 12s4.48 10 10 10 10-4.48 10-10S17.52 2 12 2zm0 18c-4.41 0-8-3.59-8-8s3.59-8 8-8 8 3.59 8 8-3.59 8-8 8zm-3.5-9c.83 0 1.5-.67 1.5-1.5S9.33 6 8.5 6 7 6.67 7 7.5 7.67 9 8.5 9zm7 0c.83 0 1.5-.67 1.5-1.5S16.33 6 15.5 6s-1.5.67-1.5 1.5.67 1.5 1.5 1.5zm-7 3c.75 1.74 2.47 3 4.5 3s3.75-1.26 4.5-3H8.5z" />
+                                </svg>
+                            </button>
+                        </div>
+
+                        <textarea id="message-input" placeholder="Ask me anything..." rows="1"></textarea>
+                        <button id="mic-btn" class="icon-btn" title="Microphone">
+                            <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none"
+                                stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"
+                                width="18" height="18">
+                                <path d="M12 1a3 3 0 0 0-3 3v8a3 3 0 0 0 6 0V4a3 3 0 0 0-3-3z" />
+                                <path d="M19 10v1a7 7 0 0 1-14 0v-1" />
+                                <line x1="12" y1="19" x2="12" y2="23" />
+                                <line x1="8" y1="23" x2="16" y2="23" />
+                            </svg>
+                        </button>
+                        <button id="send-btn" class="icon-btn">
+                            <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none"
+                                stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"
+                                width="18" height="18">
+                                <line x1="12" y1="19" x2="12" y2="5" />
+                                <polyline points="5 12 12 5 19 12" />
+                            </svg>
+                        </button>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+    <!-- WhatsApp-style New Group Modal -->
+    <div id="new-group-modal" class="modal-overlay hidden">
+        <div class="modal-content">
+            <div class="modal-header">
+                <button id="close-group-modal" class="modal-close-btn" title="Close">
+                    <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor"
+                        stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round" width="18" height="18">
+                        <line x1="18" y1="6" x2="6" y2="18"></line>
+                        <line x1="6" y1="6" x2="18" y2="18"></line>
+                    </svg>
+                </button>
+                <h3 id="modal-title-text">New Group</h3>
+            </div>
+
+            <div class="modal-body">
+                <!-- Group name input -->
+                <div class="modal-input-group">
+                    <label for="group-name-input" id="label-group-subject">Group Subject</label>
+                    <div class="input-subject-wrapper">
+                        <div class="group-default-avatar-preview">
+                            <svg viewBox="0 0 40 40" width="40" height="40" xmlns="http://www.w3.org/2000/svg">
+                                <defs>
+                                    <linearGradient id="groupGradModal" x1="0%" y1="0%" x2="100%" y2="100%">
+                                        <stop offset="0%" stop-color="#128C7E" />
+                                        <stop offset="100%" stop-color="#075E54" />
+                                    </linearGradient>
+                                </defs>
+                                <circle cx="20" cy="20" r="20" fill="url(#groupGradModal)" />
+                                <g fill="#FFFFFF" transform="translate(6, 6)">
+                                    <path d="M7 21v-1.5C7 17.5 9 16 11.5 16s4.5 1.5 4.5 3.5V21H7z" opacity="0.6" />
+                                    <circle cx="11.5" cy="11.5" r="3" opacity="0.6" />
+                                    <path d="M17 21v-1.5C17 17.5 19 16 21.5 16s4.5 1.5 4.5 3.5V21H17z" opacity="0.6" />
+                                    <circle cx="21.5" cy="21.5" r="3" opacity="0.6" />
+                                    <path d="M10 23v-2c0-2.5 2.5-4 5-4s5 1.5 5 4v2H10z" />
+                                    <circle cx="15" cy="11" r="4" />
+                                </g>
+                            </svg>
+                        </div>
+                        <input type="text" id="group-name-input" placeholder="Type group name here...">
+                    </div>
+                </div>
+
+                <!-- Search box -->
+                <div class="modal-search-wrapper">
+                    <span class="search-icon">🔍</span>
+                    <input type="text" id="group-search-input" placeholder="Search name or number">
+                </div>
+
+                <!-- Selected contacts / AI pills -->
+                <div id="selected-participants-container" class="selected-participants-list">
+                    <!-- Pills will be dynamically generated -->
+                </div>
+
+                <!-- Contacts checklist -->
+                <div class="contacts-list-header" id="label-contacts-header">Contacts</div>
+                <div id="contacts-checklist" class="contacts-checklist">
+                    <!-- Checklist items dynamically populated -->
+                </div>
+            </div>
+
+            <div class="modal-footer">
+                <button id="create-group-submit" class="whatsapp-btn green-btn">
+                    <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="currentColor" width="16"
+                        height="16" style="margin-right: 6px; vertical-align: middle;">
+                        <path d="M9 16.17L4.83 12l-1.42 1.41L9 19 21 7l-1.41-1.41z" />
+                    </svg>
+                    <span id="btn-create-text" style="vertical-align: middle;">Create Group</span>
+                </button>
+            </div>
+        </div>
+    </div>
+
+    <!-- Drag and Drop Overlay -->
+    <div id="drag-drop-overlay" class="drag-drop-overlay">
+        <div class="drag-drop-content">
+            <div class="drag-drop-icon">📁</div>
+            <div class="drag-drop-text" id="drag-drop-text">Drop files here to attach</div>
+        </div>
+    </div>
+
+    <!-- 1. Voice Call Overlay (WhatsApp style) -->
+    <div id="voice-call-overlay" class="voice-call-overlay hidden">
+        <div class="voice-call-content">
+            <div class="voice-call-header">
+                <span class="voice-call-badge">🔒 End-to-End AI Voice Session</span>
+            </div>
+            <div class="voice-call-avatar-wrapper">
+                <div class="voice-call-pulse-ring"></div>
+                <div class="voice-call-pulse-ring-2"></div>
+                <div class="voice-call-avatar" id="voice-call-avatar"></div>
+            </div>
+            <h2 id="voice-call-title">Gemini Assistant</h2>
+            <div class="voice-call-status" id="voice-call-status">Connected • Listening...</div>
+            <div class="voice-call-timer" id="voice-call-timer">00:00</div>
+            
+            <div class="voice-call-waveform" id="voice-call-waveform">
+                <span class="wave-bar"></span>
+                <span class="wave-bar"></span>
+                <span class="wave-bar"></span>
+                <span class="wave-bar"></span>
+                <span class="wave-bar"></span>
+                <span class="wave-bar"></span>
+                <span class="wave-bar"></span>
+            </div>
+
+            <div class="voice-call-controls">
+                <button class="call-ctrl-btn" id="call-mic-mute-btn" title="Mute/Unmute Mic">
+                    <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="currentColor" width="22" height="22">
+                        <path d="M12 14c1.66 0 3-1.34 3-3V5c0-1.66-1.34-3-3-3S9 3.34 9 5v6c0 1.66 1.34 3 3 3z"/>
+                        <path d="M17 11c0 2.76-2.24 5-5 5s-5-2.24-5-5H5c0 3.53 2.61 6.43 6 6.92V21h2v-3.08c3.39-.49 6-3.39 6-6.92h-2z"/>
+                    </svg>
+                </button>
+                <button class="call-ctrl-btn end-call" id="call-end-btn" title="End Call">
+                    <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="currentColor" width="26" height="26">
+                        <path d="M12 9c-1.6 0-3.15.25-4.6.72v3.1c0 .39-.23.74-.56.9-.98.49-1.87 1.12-2.66 1.85-.18.18-.43.28-.7.28-.28 0-.53-.11-.71-.29L.29 13.08a.996.996 0 0 1 0-1.41C3.28 8.76 7.42 7 12 7s8.72 1.76 11.71 4.67c.39.39.39 1.02 0 1.41l-2.48 2.48c-.18.18-.43.29-.71.29-.27 0-.52-.11-.7-.28-.79-.74-1.69-1.36-2.67-1.85-.33-.16-.56-.5-.56-.9v-3.1C15.15 9.25 13.6 9 12 9z"/>
+                    </svg>
+                </button>
+                <button class="call-ctrl-btn" id="call-speaker-btn" title="Speaker Mode">
+                    <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="currentColor" width="22" height="22">
+                        <path d="M3 9v6h4l5 5V4L7 9H3zm13.5 3c0-1.77-1.02-3.29-2.5-4.03v8.05c1.48-.73 2.5-2.25 2.5-4.02zM14 3.23v2.06c2.89.86 5 3.54 5 6.71s-2.11 5.85-5 6.71v2.06c4.01-.91 7-4.49 7-8.77s-2.99-7.86-7-8.77z"/>
+                    </svg>
+                </button>
+            </div>
+        </div>
+    </div>
+
+    <!-- 2. Vision & Screen Capture Modal -->
+    <div id="vision-capture-modal" class="modal-overlay hidden">
+        <div class="modal-content modal-md">
+            <div class="modal-header">
+                <button id="close-vision-modal" class="modal-close-btn" title="Close">&times;</button>
+                <h3>📹 Vision & Capture AI</h3>
+            </div>
+            <div class="modal-body">
+                <p class="modal-desc" id="vision-modal-desc">Select visual capture source to analyze with multimodal AI:</p>
+                <div class="vision-options-grid">
+                    <div class="vision-card" id="vision-card-screen">
+                        <div class="vision-card-icon">🖥️</div>
+                        <h4>Capture Screen / Window</h4>
+                        <p>Take an instant snapshot of your desktop or active application window for visual analysis.</p>
+                        <button class="whatsapp-btn green-btn" id="btn-capture-screen">Capture Screen</button>
+                    </div>
+                    <div class="vision-card" id="vision-card-camera">
+                        <div class="vision-card-icon">📷</div>
+                        <h4>Camera Snapshot</h4>
+                        <p>Capture a photo from your webcam to identify objects, documents, or real-world scenes.</p>
+                        <button class="whatsapp-btn" id="btn-capture-camera" style="background:var(--primary-color,#00a884);color:#fff;">Open Camera</button>
+                    </div>
+                </div>
+                <div id="camera-preview-container" class="camera-preview-container hidden" style="margin-top:16px;">
+                    <video id="camera-video-stream" autoplay playsinline style="width:100%; max-height:260px; border-radius:8px; background:#000;"></video>
+                    <div style="display:flex; gap:10px; margin-top:10px; justify-content:center;">
+                        <button class="whatsapp-btn green-btn" id="btn-take-camera-photo">📸 Take Photo & Attach</button>
+                        <button class="whatsapp-btn" id="btn-cancel-camera" style="background:transparent; border:1px solid var(--border-color); color:var(--text-color);">Cancel</button>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- 3. Status Dashboard Modal -->
+    <div id="status-overlay-modal" class="modal-overlay hidden">
+        <div class="modal-content modal-lg">
+            <div class="modal-header">
+                <button id="close-status-modal" class="modal-close-btn" title="Close">&times;</button>
+                <h3>🔄 System Health & API Status</h3>
+            </div>
+            <div class="modal-body">
+                <div class="status-summary-bar">
+                    <div class="stat-pill"><span class="stat-dot green"></span> All Providers Configured</div>
+                    <div class="stat-pill" id="status-engine-pill">⚡ Engine: Hybrid Local/Cloud</div>
+                    <div class="stat-pill" id="status-tokens-pill">📊 Lifetime Tokens: Active</div>
+                </div>
+                <div class="status-providers-grid" id="status-providers-grid">
+                    <!-- Populated dynamically via JS -->
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- 4. Channels & Skills Prompts Modal -->
+    <div id="channels-overlay-modal" class="modal-overlay hidden">
+        <div class="modal-content modal-lg">
+            <div class="modal-header">
+                <button id="close-channels-modal" class="modal-close-btn" title="Close">&times;</button>
+                <h3>📢 Channels & Skill Prompts</h3>
+            </div>
+            <div class="modal-body">
+                <p class="modal-desc">Click any pre-configured skill workflow to automatically load it into your chat:</p>
+                <div class="skills-catalog-grid" id="skills-catalog-grid">
+                    <!-- Populated dynamically via JS -->
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- 5. Communities & Multi-Agent Arena Modal -->
+    <div id="communities-overlay-modal" class="modal-overlay hidden">
+        <div class="modal-content modal-md">
+            <div class="modal-header">
+                <button id="close-communities-modal" class="modal-close-btn" title="Close">&times;</button>
+                <h3>👥 Multi-Agent Arena & Communities</h3>
+            </div>
+            <div class="modal-body">
+                <p class="modal-desc">Orchestrate collaborative multi-model deliberations and team debates:</p>
+                <div class="communities-actions" style="margin-bottom:16px;">
+                    <button class="whatsapp-btn green-btn" id="btn-quick-new-group" style="width:100%;">➕ Create Collaborative AI Group</button>
+                </div>
+                <div class="active-groups-list" id="active-groups-list">
+                    <!-- Populated dynamically via JS -->
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- 6. Archived Documents & RAG Vault Modal -->
+    <div id="archived-overlay-modal" class="modal-overlay hidden">
+        <div class="modal-content modal-lg">
+            <div class="modal-header">
+                <button id="close-archived-modal" class="modal-close-btn" title="Close">&times;</button>
+                <h3>📦 Document Vault & RAG Memory</h3>
+            </div>
+            <div class="modal-body">
+                <div class="vault-search-wrapper" style="display:flex; gap:10px; margin-bottom:16px;">
+                    <input type="text" id="vault-search-input" placeholder="Search vector memory and indexed knowledge..." style="flex:1; padding:8px 12px; border-radius:8px; border:1px solid var(--border-color); background:var(--input-bg); color:var(--text-color);">
+                    <button class="whatsapp-btn green-btn" id="vault-search-btn">Search</button>
+                </div>
+                <div class="vault-results-container" id="vault-results-container">
+                    <div class="vault-empty-state" style="text-align:center; padding:24px; color:var(--text-muted);">
+                        <span style="font-size:36px; display:block; margin-bottom:8px;">🧠</span>
+                        <p>Local RAG Vector Store (<code>local_rag.db</code>) is active and indexing conversational contexts & document extractions.</p>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- 7. User Profile Modal -->
+    <div id="profile-overlay-modal" class="modal-overlay hidden">
+        <div class="modal-content modal-sm">
+            <div class="modal-header">
+                <button id="close-profile-modal" class="modal-close-btn" title="Close">&times;</button>
+                <h3>👤 User Profile</h3>
+            </div>
+            <div class="modal-body" style="text-align:center;">
+                <div class="profile-avatar-large" id="profile-avatar-large" style="width:72px; height:72px; border-radius:50%; margin:0 auto; overflow:hidden; border:2px solid var(--primary-color);"></div>
+                <h3 id="profile-user-name" style="margin-top:12px; font-size:18px;">Julian Curay</h3>
+                <p id="profile-user-os" style="color:var(--text-muted); font-size:13px; margin-bottom:16px;">Windows Desktop Client</p>
+                <hr class="sidebar-divider" style="margin:12px 0;">
+                <div class="shortcuts-cheat-sheet" style="text-align:left; font-size:13px;">
+                    <h4 style="font-size:12px; text-transform:uppercase; color:var(--text-muted); margin-bottom:8px;">Keyboard Shortcuts</h4>
+                    <div style="display:flex; justify-content:space-between; margin-bottom:6px;"><span>Send message</span><kbd style="background:var(--hover-bg); padding:2px 6px; border-radius:4px; border:1px solid var(--border-color);">Enter</kbd></div>
+                    <div style="display:flex; justify-content:space-between; margin-bottom:6px;"><span>New line</span><kbd style="background:var(--hover-bg); padding:2px 6px; border-radius:4px; border:1px solid var(--border-color);">Shift + Enter</kbd></div>
+                    <div style="display:flex; justify-content:space-between; margin-bottom:6px;"><span>Search chat</span><kbd style="background:var(--hover-bg); padding:2px 6px; border-radius:4px; border:1px solid var(--border-color);">Ctrl + F</kbd></div>
+                    <div style="display:flex; justify-content:space-between; margin-bottom:6px;"><span>Toggle Voice</span><kbd style="background:var(--hover-bg); padding:2px 6px; border-radius:4px; border:1px solid var(--border-color);">Ctrl + M</kbd></div>
+                    <div style="display:flex; justify-content:space-between;"><span>Close dialogs</span><kbd style="background:var(--hover-bg); padding:2px 6px; border-radius:4px; border:1px solid var(--border-color);">Esc</kbd></div>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- 8. Setup & Onboarding Wizard Modal -->
+    <div id="setup-wizard-modal" class="modal-overlay hidden">
+        <div class="modal-content modal-lg" style="max-width: 680px;">
+            <div class="modal-header">
+                <button id="close-setup-wizard" class="modal-close-btn" title="Close">&times;</button>
+                <h3>⚡ Asistente de Configuración & Bienvenida</h3>
+            </div>
+            <div class="modal-body">
+                <p class="modal-desc" style="margin-bottom: 16px;">Configura tu entorno de trabajo en 3 pasos rápidos sin necesidad de editar archivos técnicos.</p>
+                
+                <!-- Stepper Progress -->
+                <div class="wizard-stepper" style="display: flex; justify-content: space-between; margin-bottom: 20px; border-bottom: 1px solid var(--border-color); padding-bottom: 12px;">
+                    <div class="wizard-step active" id="wizard-step-1-indicator" style="font-size:13px; font-weight:600; color:var(--accent-color, #10a37f); display:flex; align-items:center; gap:6px;"><span class="step-num" style="width:20px; height:20px; border-radius:50%; background:var(--accent-color, #10a37f); color:#fff; display:inline-flex; align-items:center; justify-content:center; font-size:11px;">1</span> Diagnóstico</div>
+                    <div class="wizard-step" id="wizard-step-2-indicator" style="font-size:13px; font-weight:600; color:var(--text-muted); display:flex; align-items:center; gap:6px;"><span class="step-num" style="width:20px; height:20px; border-radius:50%; background:var(--hover-bg); color:var(--text-muted); display:inline-flex; align-items:center; justify-content:center; font-size:11px;">2</span> Conectar APIs</div>
+                    <div class="wizard-step" id="wizard-step-3-indicator" style="font-size:13px; font-weight:600; color:var(--text-muted); display:flex; align-items:center; gap:6px;"><span class="step-num" style="width:20px; height:20px; border-radius:50%; background:var(--hover-bg); color:var(--text-muted); display:inline-flex; align-items:center; justify-content:center; font-size:11px;">3</span> ¡Listo para Trabajar!</div>
+                </div>
+
+                <!-- Step 1: Hardware Capabilities -->
+                <div id="wizard-step-1" class="wizard-step-content">
+                    <h4 style="margin-top:0; font-size:15px; margin-bottom:12px;">🔍 Capacidades del Sistema Detectadas</h4>
+                    <div class="hardware-diagnosis-grid" id="hardware-diagnosis-grid" style="display:grid; grid-template-columns:1fr 1fr; gap:12px; margin-bottom:16px;">
+                        <div class="diag-card" id="diag-gpu" style="background:var(--input-bg); border:1px solid var(--border-color); border-radius:8px; padding:12px; display:flex; gap:10px; align-items:center;"><span class="diag-icon" style="font-size:22px;">⚡</span><div><strong style="font-size:13px; display:block;">Aceleración GPU:</strong><p class="diag-val" id="diag-gpu-val" style="margin:2px 0 0 0; font-size:12px; color:var(--text-muted);">Detectando...</p></div></div>
+                        <div class="diag-card" id="diag-ocr" style="background:var(--input-bg); border:1px solid var(--border-color); border-radius:8px; padding:12px; display:flex; gap:10px; align-items:center;"><span class="diag-icon" style="font-size:22px;">👁️</span><div><strong style="font-size:13px; display:block;">Tesseract OCR:</strong><p class="diag-val" id="diag-ocr-val" style="margin:2px 0 0 0; font-size:12px; color:var(--text-muted);">Detectando...</p></div></div>
+                        <div class="diag-card" id="diag-mic" style="background:var(--input-bg); border:1px solid var(--border-color); border-radius:8px; padding:12px; display:flex; gap:10px; align-items:center;"><span class="diag-icon" style="font-size:22px;">🎙️</span><div><strong style="font-size:13px; display:block;">Micrófono / Audio:</strong><p class="diag-val" id="diag-mic-val" style="margin:2px 0 0 0; font-size:12px; color:var(--accent-color, #10a37f);">Listo (Web Audio API)</p></div></div>
+                        <div class="diag-card" id="diag-engine" style="background:var(--input-bg); border:1px solid var(--border-color); border-radius:8px; padding:12px; display:flex; gap:10px; align-items:center;"><span class="diag-icon" style="font-size:22px;">🛡️</span><div><strong style="font-size:13px; display:block;">Modo de Ejecución:</strong><p class="diag-val" id="diag-engine-val" style="margin:2px 0 0 0; font-size:12px; color:var(--text-muted);">Híbrido Local/ACA</p></div></div>
+                    </div>
+                    <div style="text-align:right; margin-top:20px;">
+                        <button class="whatsapp-btn green-btn" id="btn-wizard-to-step-2">Continuar a Conexión de APIs &rarr;</button>
+                    </div>
+                </div>
+
+                <!-- Step 2: Provider Connection with Live Validation -->
+                <div id="wizard-step-2" class="wizard-step-content hidden">
+                    <h4 style="margin-top:0; font-size:15px; margin-bottom:8px;">🔑 Conecta tus Proveedores de IA</h4>
+                    <p style="font-size:13px; color:var(--text-muted); margin-bottom:14px;">Ingresa la API Key de tu proveedor favorito y presiona <strong>"Probar y Guardar"</strong> para verificarla en tiempo real:</p>
+                    
+                    <div class="provider-wizard-form" style="display:flex; flex-direction:column; gap:12px;">
+                        <div style="display:flex; gap:10px;">
+                            <select id="wizard-provider-select" style="padding:8px 12px; border-radius:8px; border:1px solid var(--border-color); background:var(--input-bg); color:var(--text-color); font-weight:600; min-width:140px;">
+                                <option value="Gemini">Google Gemini</option>
+                                <option value="DeepSeek">DeepSeek</option>
+                                <option value="OpenAI">OpenAI (ChatGPT)</option>
+                                <option value="Anthropic">Anthropic (Claude)</option>
+                                <option value="Perplexity">Perplexity AI</option>
+                                <option value="Grok">xAI Grok</option>
+                                <option value="Cartesia">Cartesia Voice (TTS)</option>
+                            </select>
+                            <input type="password" id="wizard-api-key-input" placeholder="Pega tu API Key aquí (ej. AIzaSy... / sk-...)" style="flex:1; padding:8px 12px; border-radius:8px; border:1px solid var(--border-color); background:var(--input-bg); color:var(--text-color);">
+                            <button class="whatsapp-btn green-btn" id="btn-wizard-validate-key" style="white-space:nowrap;">🔍 Probar y Guardar</button>
+                        </div>
+                        <div id="wizard-validation-feedback" style="min-height:24px; font-size:13px; font-weight:500;"></div>
+                        
+                        <div class="active-keys-pills" id="wizard-active-keys-pills" style="margin-top:8px; display:flex; flex-wrap:wrap; gap:8px;">
+                            <!-- Populated with configured status badges -->
+                        </div>
+                    </div>
+
+                    <div style="display:flex; justify-content:space-between; margin-top:24px;">
+                        <button class="whatsapp-btn" id="btn-wizard-back-to-step-1" style="background:transparent; border:1px solid var(--border-color); color:var(--text-color);">&larr; Atrás</button>
+                        <button class="whatsapp-btn green-btn" id="btn-wizard-to-step-3">Continuar &rarr;</button>
+                    </div>
+                </div>
+
+                <!-- Step 3: Ready to work -->
+                <div id="wizard-step-3" class="wizard-step-content hidden" style="text-align:center; padding:16px 0;">
+                    <span style="font-size:48px; display:block; margin-bottom:12px;">🚀</span>
+                    <h3 style="margin-bottom:8px;">¡Todo listo para trabajar al máximo nivel!</h3>
+                    <p style="color:var(--text-muted); font-size:14px; max-width:480px; margin:0 auto 20px auto;">Tu asistente está configurado y optimizado. Recuerda que puedes interactuar por voz, adjuntar archivos Excel/Word o pedirle que genere entregables ejecutivos.</p>
+                    <button class="whatsapp-btn green-btn" id="btn-wizard-finish" style="padding:10px 28px; font-size:15px; font-weight:600;">✨ Comenzar a Usar Ignite Chat</button>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- 9. Productivity & ROI Dashboard Modal -->
+    <div id="roi-overlay-modal" class="modal-overlay hidden">
+        <div class="modal-content modal-lg" style="max-width:720px;">
+            <div class="modal-header">
+                <button id="close-roi-modal" class="modal-close-btn" title="Close">&times;</button>
+                <h3>📊 Dashboard de Productividad, Impacto & ROI</h3>
+            </div>
+            <div class="modal-body">
+                <p class="modal-desc" style="margin-bottom:16px;">Telemetría de valor real generado por Ignite Chat en tus 8 horas de trabajo operativo:</p>
+                
+                <div class="roi-metric-grid" style="display:grid; grid-template-columns: repeat(auto-fit, minmax(140px, 1fr)); gap:12px; margin-bottom:20px;">
+                    <div class="roi-card highlight" style="background:var(--input-bg); border:1px solid var(--border-color); border-radius:10px; padding:14px; text-align:center;">
+                        <span class="roi-card-icon" style="font-size:24px; display:block; margin-bottom:4px;">⏱️</span>
+                        <div class="roi-card-number" id="roi-hours-saved" style="font-size:22px; font-weight:800; color:var(--accent-color, #10a37f);">0.0 hrs</div>
+                        <div class="roi-card-label" style="font-size:12px; color:var(--text-muted); margin-top:2px;">Tiempo Total Ahorrado</div>
+                    </div>
+                    <div class="roi-card" style="background:var(--input-bg); border:1px solid var(--border-color); border-radius:10px; padding:14px; text-align:center;">
+                        <span class="roi-card-icon" style="font-size:24px; display:block; margin-bottom:4px;">📄</span>
+                        <div class="roi-card-number" id="roi-docs-count" style="font-size:22px; font-weight:800; color:var(--text-color);">0</div>
+                        <div class="roi-card-label" style="font-size:12px; color:var(--text-muted); margin-top:2px;">Documentos Creados</div>
+                    </div>
+                    <div class="roi-card" style="background:var(--input-bg); border:1px solid var(--border-color); border-radius:10px; padding:14px; text-align:center;">
+                        <span class="roi-card-icon" style="font-size:24px; display:block; margin-bottom:4px;">💵</span>
+                        <div class="roi-card-number" id="roi-human-cost-saved" style="font-size:22px; font-weight:800; color:#3b82f6;">$0.00</div>
+                        <div class="roi-card-label" style="font-size:12px; color:var(--text-muted); margin-top:2px;">Valor Operativo Creado</div>
+                    </div>
+                    <div class="roi-card highlight-green" style="background:var(--input-bg); border:1px solid var(--border-color); border-radius:10px; padding:14px; text-align:center;">
+                        <span class="roi-card-icon" style="font-size:24px; display:block; margin-bottom:4px;">⚡</span>
+                        <div class="roi-card-number" id="roi-multiplier" style="font-size:22px; font-weight:800; color:#eab308;">0x</div>
+                        <div class="roi-card-label" style="font-size:12px; color:var(--text-muted); margin-top:2px;">Multiplicador ROI</div>
+                    </div>
+                </div>
+
+                <div class="roi-breakdown-section" style="background:var(--input-bg); border:1px solid var(--border-color); border-radius:10px; padding:16px; margin-bottom:16px;">
+                    <h4 style="margin-top:0; font-size:14px; margin-bottom:10px;">📈 Detalle de Ahorro y Eficiencia</h4>
+                    <div style="display:grid; grid-template-columns:1fr 1fr; gap:12px; font-size:13px;">
+                        <div>• <strong>Redacción y Síntesis:</strong> <span id="roi-typing-saved" style="font-weight:600;">0.0 hrs</span></div>
+                        <div>• <strong>Formateo de Excel / Word:</strong> <span id="roi-formatting-saved" style="font-weight:600;">0.0 hrs</span></div>
+                        <div>• <strong>Palabras Asistidas:</strong> <span id="roi-words-count" style="font-weight:600;">0 palabras</span></div>
+                        <div>• <strong>Costo Total en Tokens:</strong> <span id="roi-ai-cost" style="font-weight:600; color:var(--accent-color, #10a37f);">$0.0000 USD</span></div>
+                    </div>
+                </div>
+
+                <div style="text-align:right;">
+                    <button class="whatsapp-btn green-btn" id="btn-refresh-roi">🔄 Actualizar Métricas</button>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- WhatsApp-style attachment viewer (PDFs, images, documents) -->
+    <div id="file-preview-overlay" class="file-preview-overlay hidden" role="dialog" aria-modal="true" aria-labelledby="file-preview-name">
+        <div class="file-preview-toolbar">
+            <button type="button" id="file-preview-close" class="file-preview-tool-btn" title="Close">
+                <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round" width="20" height="20">
+                    <line x1="18" y1="6" x2="6" y2="18"></line>
+                    <line x1="6" y1="6" x2="18" y2="18"></line>
+                </svg>
+            </button>
+            <div class="file-preview-heading">
+                <span id="file-preview-name"></span>
+                <span id="file-preview-meta"></span>
+            </div>
+            <button type="button" id="file-preview-download" class="file-preview-tool-btn" title="Download">
+                <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round" width="20" height="20">
+                    <path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"></path>
+                    <polyline points="7 10 12 15 17 10"></polyline>
+                    <line x1="12" y1="15" x2="12" y2="3"></line>
+                </svg>
+            </button>
+        </div>
+        <div id="file-preview-stage" class="file-preview-stage"></div>
+        <div id="file-preview-thumbs" class="file-preview-thumbs hidden"></div>
+    </div>
+
+    <script src="js/translations.js"></script>
+    <script src="js/state.js"></script>
+    <script src="js/models.js"></script>
+    <script src="js/stateMachine.js"></script>
+    <script src="js/remoteBridge.js"></script>
+    <script src="js/audio.js"></script>
+    <script src="js/files.js"></script>
+    <script src="js/chat.js"></script>
+    <script src="js/aiGrid.js"></script>
+    <script src="js/api.js"></script>
+    <script src="js/app.js"></script>
+</body>
+
+</html>

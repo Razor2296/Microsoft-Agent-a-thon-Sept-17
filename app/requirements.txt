@@ -1,0 +1,43 @@
+google-genai>=1.0.0
+python-dotenv>=1.0.0
+Pillow>=10.0.0
+pywebview>=5.0.0
+pythonnet>=3.0.0
+requests>=2.28.0
+tenacity>=8.2.0
+pyinstaller>=6.0.0
+langdetect>=1.0.9
+pytz>=2026.1
+beautifulsoup4>=4.12.0
+youtube-transcript-api>=1.2.4
+openai>=1.0.0
+anthropic>=0.18.0
+mutagen>=1.47.0
+pypdf>=3.0.0
+PyPDF2>=3.0.0
+pyodbc>=5.3.0
+azure-kusto-data>=6.0.4
+azure-kusto-ingest>=6.0.4
+python-docx>=1.1.0
+python-pptx>=0.6.21
+openpyxl>=3.1.2
+yt-dlp>=0.28.1
+
+# Windows ARM64: cryptography>=47 often lacks wheels and fails source builds (needs MSVC link.exe).
+cryptography>=42.0.0,<47
+
+# Local Whisper (Tier 1). Requires ctranslate2 wheels (x86_64 / amd64).
+# On Windows ARM64 native Python, ctranslate2 lacks wheels; the app falls back to Gemini/OpenAI API.
+faster-whisper>=1.0.0; platform_machine != "ARM64"
+
+# ── Sprint 1 additions ──────────────────────────────────────────────────────
+pydantic>=2.0.0          # Skill 1.1 — Strict Typing & data validation
+pytest>=7.4.0            # Skill 1.5 — Unit & Integration test runner
+pytest-mock>=3.12.0      # Skill 1.5 — Mock support for unit tests
+pre-commit>=3.7.0        # Skill 1.4 — Git hook automation (install with: pre-commit install)
+
+# ── Hybrid ACA HTTP backend ─────────────────────────────────────────────────
+fastapi>=0.115.0
+uvicorn>=0.30.0
+aiofiles>=24.1.0
+httpx>=0.27.0

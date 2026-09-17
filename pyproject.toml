@@ -1,0 +1,50 @@
+[project]
+name = "ignite-chat"
+version = "1.0.0"
+description = "Enterprise-Grade Multi-Provider AI Desktop Assistant"
+requires-python = ">=3.10"
+
+# ── Ruff (Skill 1.4 — Code Quality) ────────────────────────────────────────
+[tool.ruff]
+target-version = "py310"
+line-length = 120
+exclude = [
+    "app/dist",
+    "app/__pycache__",
+    ".venv",
+    "*.pyc",
+]
+
+[tool.ruff.lint]
+select = [
+    "E",   # pycodestyle errors
+    "W",   # pycodestyle warnings
+    "F",   # pyflakes (undefined names, unused imports)
+    "I",   # isort (import ordering)
+    "UP",  # pyupgrade (modern Python syntax)
+    "B",   # flake8-bugbear (common bugs)
+    "C4",  # flake8-comprehensions
+    "SIM", # flake8-simplify
+]
+ignore = [
+    "E501",   # line too long — handled by formatter
+    "B904",   # use raise ... from err (too strict for current codebase)
+    "SIM108", # ternary operator suggestion
+]
+
+[tool.ruff.lint.per-file-ignores]
+"app/tests/*" = ["F401", "F811"]    # allow unused imports in tests
+"app/backend/libraries.py" = ["F401"] # aggregator intentionally re-exports
+
+[tool.ruff.format]
+quote-style = "double"
+indent-style = "space"
+line-ending = "auto"
+
+# ── Pytest (Skill 1.5 — Unit Tests) ────────────────────────────────────────
+[tool.pytest.ini_options]
+testpaths = ["app/tests"]
+python_files = ["test_*.py"]
+python_classes = ["Test*"]
+python_functions = ["test_*"]
+addopts = "-v --tb=short --no-header"

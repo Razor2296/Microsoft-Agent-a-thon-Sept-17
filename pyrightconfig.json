@@ -1,0 +1,16 @@
+{
+  // Pyrightconfig for Ignite Chat
+  // Tells Pyright/Pylance where to find the project's internal modules.
+  // The launcher runs from within app/, so app/ itself is the import root.
+  "include": ["app"],
+  "extraPaths": ["app"],
+  "pythonVersion": "3.10",
+  "pythonPlatform": "Windows",
+  "typeCheckingMode": "basic",
+  "reportMissingImports": "warning",
+  "reportMissingModuleSource": "none",
+  "reportWildcardImportFromLibrary": "none",
+  "reportUnusedImport": "none",
+  "venvPath": ".",
+  "venv": ".venv"
+}

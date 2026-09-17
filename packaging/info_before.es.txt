@@ -1,0 +1,19 @@
+Ignite Chat — Antes de instalar
+================================
+
+Este asistente instala Ignite Chat para tu usuario de Windows (no requiere administrador).
+
+Ubicaciones
+• Programa:  %LOCALAPPDATA%\Programs\Ignite Chat
+• Tus datos: %LOCALAPPDATA%\Ignite Chat  (chats, logs, memoria)
+  Se conservan al reinstalar o desinstalar.
+
+Requisitos
+• Windows 10 u 11 (64 bits)
+• Microsoft Edge WebView2 Runtime
+• Tus propias API keys (se genera un .env de ejemplo; nunca se empaquetan secretos)
+
+Después
+1. Abre Ignite Chat
+2. Configura las claves en Ajustes o en el archivo .env
+3. Listo

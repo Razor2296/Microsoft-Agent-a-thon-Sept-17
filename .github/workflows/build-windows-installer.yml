@@ -1,0 +1,67 @@
+name: Build Windows Installer
+
+# PR check only (with ci.yml). Artifact name includes github.sha.
+# Manual rebuild: Actions → workflow_dispatch.
+on:
+  pull_request:
+    branches: [main, Develop]
+    paths:
+      - "app/**"
+      - "packaging/**"
+      - ".github/workflows/build-windows-installer.yml"
+  workflow_dispatch:
+
+concurrency:
+  group: installer-pr-${{ github.event.pull_request.number || github.ref }}
+  cancel-in-progress: true
+
+permissions:
+  contents: read
+
+jobs:
+  windows-installer:
+    name: PyInstaller + Inno Setup
+    runs-on: windows-latest
+    timeout-minutes: 120
+    defaults:
+      run:
+        shell: cmd
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Set up Python 3.12 x64
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+          architecture: x64
+
+      - name: Set up .NET (pythonnet / PyWebView)
+        uses: actions/setup-dotnet@v4
+        with:
+          dotnet-version: "8.0.x"
+
+      - name: Install Python dependencies
+        working-directory: app
+        run: |
+          python -m pip install --upgrade pip
+          pip install -r requirements.txt
+          pip install pyinstaller python-dotenv
+
+      - name: Install Inno Setup 6
+        shell: powershell
+        run: choco install innosetup -y --no-progress
+
+      - name: Build desktop app and installer
+        env:
+          GITHUB_ACTIONS: true
+        run: app\build_desktop.bat /nopause
+
+      - name: Upload IgniteChat_Setup.exe
+        uses: actions/upload-artifact@v4
+        with:
+          name: IgniteChat_Setup-${{ github.sha }}
+          path: release/IgniteChat_Setup.exe
+          if-no-files-found: error
+          retention-days: 14

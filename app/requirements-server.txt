@@ -1,0 +1,26 @@
+# Server / ACA dependencies (no pywebview / pythonnet)
+google-genai>=1.0.0
+python-dotenv>=1.0.0
+Pillow>=10.0.0
+requests>=2.28.0
+tenacity>=8.2.0
+langdetect>=1.0.9
+pytz>=2026.1
+beautifulsoup4>=4.12.0
+youtube-transcript-api>=1.2.4
+openai>=1.0.0
+anthropic>=0.18.0
+mutagen>=1.47.0
+pypdf>=3.0.0
+PyPDF2>=3.0.0
+python-docx>=1.1.0
+python-pptx>=0.6.21
+openpyxl>=3.1.2
+yt-dlp>=0.28.1
+cryptography>=42.0.0,<47
+faster-whisper>=1.0.0; platform_machine != "ARM64"
+pydantic>=2.0.0
+fastapi>=0.115.0
+uvicorn>=0.30.0
+aiofiles>=24.1.0
+httpx>=0.27.0

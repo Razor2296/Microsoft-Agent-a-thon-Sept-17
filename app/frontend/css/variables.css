@@ -1,0 +1,55 @@
+:root {
+    /* Dark Mode Variables (Default) */
+    --bg-color: #161717;
+    --sidebar-bg: #161717;
+    --header-bg: #161717;
+    --left-rail-bg: #1D1F1F;
+    --text-top-bar: #ffffff;
+    /* WhatsApp dark */
+    --chat-bg: #161717;
+    --text-color: #e9edef;
+    --text-muted: #8B8C8C;
+    --btn-mic: #FFFFFF;
+    --border-color: #161717;
+    --primary-color: #00a884;
+    --user-msg-bg: #144D37;
+    --ai-msg-bg: #161717;
+    --input-bg: #161717;
+    --hover-bg: #161717;
+    --red-btn: #f15c6d;
+    --switch-bg: #161717;
+    --switch-active: #f15c6d;
+    --bubble-shadow: 0 1px 0.5px rgba(0, 0, 0, .13);
+    --code-bg: #1e1e1e;
+    --code-color: #d4d4d4;
+    --code-border: rgba(255, 255, 255, 0.1);
+    --budget-warn-color: #d4a017;
+    --budget-critical-color: #e67e22;
+    --budget-exhausted-color: var(--red-btn);
+}
+
+body.light-mode {
+    /* Light Mode Variables */
+    --bg-color: #efeae2;
+    --sidebar-bg: #ffffff;
+    --header-bg: #ffffff;
+    --left-rail-bg: #F7F5F3;
+    --text-top-bar: #0A0A0A;
+    --text-color: #111b21;
+    --text-muted: #667781;
+    --btn-mic: #030303;
+    --border-color: #e9edef;
+    --primary-color: #008069;
+    --user-msg-bg: #d9fdd3;
+    --ai-msg-bg: #ffffff;
+    --input-bg: #ffffff;
+    --hover-bg: #F6F5F4;
+    --switch-bg: #d1d7db;
+    --bubble-shadow: 0 1px 0.5px rgba(11, 20, 26, .13);
+    --code-bg: #f6f8fa;
+    --code-color: #24292e;
+    --code-border: #e1e4e8;
+    --budget-warn-color: #c48a00;
+    --budget-critical-color: #d35400;
+    --budget-exhausted-color: var(--red-btn, #f15c6d);
+}

@@ -1,0 +1,25 @@
+Ignite Chat — Antes de instalar / Before you install
+====================================================
+
+Qué instala este asistente
+• La aplicación de escritorio Ignite Chat (Windows x64).
+• Accesos en el menú Inicio (y escritorio si lo eliges).
+
+Dónde queda todo
+• Programa:  %LOCALAPPDATA%\Programs\Ignite Chat
+• Tus datos: %LOCALAPPDATA%\Ignite Chat  (chats, logs, memoria RAG)
+  → Se conservan si reinstalas o desinstalas el programa.
+
+Requisitos
+• Windows 10/11 x64
+• Microsoft Edge WebView2 Runtime (el asistente te avisa si falta)
+• Tus propias API keys (se crea un .env de ejemplo; no se copian secretos)
+
+Después de instalar
+1. Abre Ignite Chat
+2. Configura las claves en Ajustes o edita el archivo .env
+3. ¡Listo!
+
+What this installer does
+• Installs Ignite Chat desktop (Windows x64) for the current user (no admin).
+• Keeps chats/logs under LocalAppData so uninstall does not wipe your history.

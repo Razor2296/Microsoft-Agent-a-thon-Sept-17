@@ -1,0 +1,75 @@
+# Python
+__pycache__/
+*.py[cod]
+*$py.class
+*.egg-info/
+.pytest_cache/
+.mypy_cache/
+.ruff_cache/
+.coverage
+htmlcov/
+.venv/
+.venv*/
+.venv_x64/
+venv/
+env/
+
+# Secrets — never commit
+.env
+.env.local
+.env.staging
+.env.prod
+**/.env
+!**/.env.example
+!**/.env.*.example
+secrets/kvignitechat-migrate.env
+secrets/kvsecret2296-migrate.env
+scripts/ignite-api-payg-export.json
+
+# Runtime / local data
+app/log/
+log/
+**/log/
+app/Databases/*.db
+app/Databases/*.sqlite*
+**/local_rag.db
+*.db
+*.sqlite
+*.sqlite3
+
+# OneDrive / local scratch & crash dumps
+app/scratch/
+scratch/
+app/crash_log/
+crash_log/
+**/crash_log.txt
+**/crash_log.txt.*
+*.log
+
+# Local pytest result dumps (often cloud-only on OneDrive → git index I/O errors)
+app/tests/unit/results/
+**/tests/**/results/
+
+# Desktop packaging artifacts (PyInstaller) — do NOT commit
+app/dist/
+dist/
+app/build/
+build/
+*.spec
+**/Ignite Chat.spec
+
+# Windows installer output (Inno Setup) — local only, never commit
+release/
+**/IgniteChat_Setup.exe
+packaging/_output/
+
+# OS / editor
+.DS_Store
+Thumbs.db
+*.bkp
+**/.$*.bkp
+desktop.ini
+.idea/
+.vscode/
+*.swp
+*~

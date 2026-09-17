@@ -1,0 +1,4 @@
+# Force LF for shell scripts so WSL/bash does not choke on CRLF (pipefail\r).
+*.sh text eol=lf
+*.bash text eol=lf
+scripts/* text eol=lf

@@ -1,0 +1,17 @@
+.git
+.github
+.venv*
+.pytest_cache
+.ruff_cache
+app/dist
+app/build
+app/log
+app/crash_log
+app/Databases/**/*.db
+app/Databases/*.db
+app/tests/unit/results
+*.spec
+*.md
+docs/
+infra/
+scratch/

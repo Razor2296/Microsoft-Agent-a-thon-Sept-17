@@ -1,0 +1,85 @@
+# Keep the Docker build context small (critical on OneDrive + WSL).
+.git
+.gitignore
+.gitattributes
+.github
+.cursor
+.agents
+.vscode
+.idea
+*.md
+
+# Secrets / local env — never bake into the image
+.env
+.env.*
+!.env.example
+
+# Python junk
+__pycache__
+**/__pycache__
+*.py[cod]
+*.egg-info
+.pytest_cache
+.mypy_cache
+.ruff_cache
+.coverage
+htmlcov
+.venv
+venv
+env
+
+# Runtime data / local scratch that must NOT ship in the image
+log
+**/log
+Databases
+**/Databases
+data
+scratch
+**/scratch
+**/generated_files
+*.db
+*.sqlite
+*.sqlite3
+local_rag.db
+*.png
+*.jpg
+*.jpeg
+*.webp
+*.wav
+*.mp3
+*.webm
+
+# Desktop / Windows packaging artifacts
+dist
+build
+*.spec
+*.exe
+*.msi
+*.dll
+icon.ico
+pythonnet.runtimeconfig.json
+launcher_webview.py
+build_desktop.bat
+build_desktop_slim.bat
+crear_acceso_directo.bat
+enable_startup.bat
+requirements-desktop.txt
+requirements.txt
+
+# Frontend caches / maps (server image does not need them)
+frontend/**/*.map
+node_modules
+**/node_modules
+
+# Tests are not required at runtime
+tests
+**/tests
+pytest.ini
+.pre-commit-config.yaml
+
+# Editor / OS noise
+.DS_Store
+Thumbs.db
+desktop.ini
+*.swp
+*~
