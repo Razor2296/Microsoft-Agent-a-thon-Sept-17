@@ -1,10 +1,28 @@
-# Contest CI note
+# Contest CI — Microsoft Agent-a-thon snapshot
 
-This public Agent-a-thon snapshot **does not** run Azure Container Apps / ACR deploy.
-Those workflows belong to the product pipeline ([IgniteChat](https://github.com/Razor2296/IgniteChat)).
+This public repo is a **Founderz / Level 3 Architect** submission. It is **not** the PAYG production pipeline.
 
-Remaining Actions here:
-- `ci.yml` — Ruff + pytest on PR
-- `build-windows-installer.yml` — optional Windows installer on PR / manual run
+| Workflow | What it does | Secrets needed |
+| --- | --- | --- |
+| `ci.yml` | Chat pytest + Foundry offline tool tests | none |
+| `build-windows-installer.yml` | Optional Windows installer artifact | none |
 
-Foundry Level 3 scripts live under `foundry/` and run locally against project `juliancuray-7914` (`az login`), not via GitHub Secrets.
+**Removed on purpose:** `deploy-aca.yml`, `build-acr.yml` — those push to `igniteapisiuacr` / Container Apps and need `ACR_*` (and Azure login). They live in [IgniteChat](https://github.com/Razor2296/IgniteChat).
+
+## Foundry (contest plane)
+
+Run on your machine after `az login`, project **`juliancuray-7914`**:
+
+```powershell
+cd foundry
+copy .env.example .env
+# set PROJECT_CONNECTION_STRING + MODEL_DEPLOYMENT_NAME=gpt-5-mini
+pip install -r requirements.txt
+python test_tools.py
+python agents.py
+python monitor.py
+python evaluate.py
+python workflow.py
+```
+
+Details: [foundry/README.md](../foundry/README.md).

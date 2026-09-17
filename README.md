@@ -91,23 +91,24 @@ Lab scenarios from [FrontierWeekHack](https://github.com/microsoft/FrontierWeekH
 
 1. **Problem** — a real PDF (prescription / invoice), not a toy prompt.  
 2. **Usability** — Ignite Chat: attach → extract (API on ACA) → ask → export Office.  
-3. **Foundry** — portal: resource `foundryignitechatsiu`, deployment in use, plus `ignite-api` on Azure Container Apps.  
-4. **Multi-agent** — say out loud: Chat orchestrates, API extracts, Foundry serves the model.  
-5. **Observability** — one turn’s token/latency line or ACA log.  
-6. Stop. No Autopilot roadmap.
+3. **Foundry Agent Service** — project `juliancuray-7914`: Agents + Tracing + Evaluations + workflow (after `foundry/*.py`).  
+4. **Product models (optional)** — `foundryignitechatsiu` + ACA `ignite-api`.  
+5. Stop. No Autopilot roadmap.
 
 ---
 
 ## Azure / Foundry (this contest)
 
-- Foundry project for **Ignite Chat** models: `foundryignitechatsiu` (East US).  
-- Foundry / Azure OpenAI for **Ignite API**: `igniteapifoundry2296` (East US 2) — different resource, same subscription.  
-- Runtime: Azure Container Apps, Key Vault, optional Azure Files for session data.  
-- Student / Foundry access: [Azure for Students](https://azure.microsoft.com/en-us/free/students) · [AI Foundry](https://azure.microsoft.com/en-us/products/ai-foundry/) · [ai.azure.com/nextgen](https://ai.azure.com/nextgen)
+| Resource | Role |
+| --- | --- |
+| **`juliancuray-7914`** | Foundry **project** for Agent Service (agents, tracing, evals, workflow) — contest plane |
+| **`foundryignitechatsiu`** | Azure OpenAI / Foundry for **Ignite Chat** chat models (e.g. `gpt-4.1-mini`) |
+| **`igniteapifoundry2296`** | Foundry / OpenAI for **Ignite API** extraction |
+| ACA + Key Vault | Runtime for Chat API and Ignite API |
 
----
+Student / Foundry access: [Azure for Students](https://azure.microsoft.com/en-us/free/students) · [AI Foundry](https://azure.microsoft.com/en-us/products/ai-foundry/) · [ai.azure.com/nextgen](https://ai.azure.com/nextgen)
 
-See also [.github/CONTEST-CI.md](.github/CONTEST-CI.md) — this snapshot does **not** deploy ACA/ACR (no PAYG secrets on purpose).
+CI on this repo: [.github/CONTEST-CI.md](.github/CONTEST-CI.md) — pytest + Foundry offline tests; **no** ACA/ACR deploy (that stays in IgniteChat).
 
 ## Run locally (Chat)
 
@@ -129,4 +130,4 @@ Full product notes: [docs/IGNITE_CHAT.md](docs/IGNITE_CHAT.md). Hybrid ACA: [doc
 - Not the Devpost / Google Cloud story.  
 - Not Autopilot (not in this build).  
 - Not a dump of Ignite API source (use [IgniteAPI](https://github.com/Razor2296/IgniteAPI)).  
-- Not a claim that we already filled every Foundry Evaluation / tracing checkbox — we show the production loop we run, and we label gaps.
+- Not a CI that deploys your PAYG Container Apps (removed on purpose — no ACR secrets on a public contest repo).

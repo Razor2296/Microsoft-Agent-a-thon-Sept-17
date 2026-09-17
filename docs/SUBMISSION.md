@@ -16,37 +16,38 @@ Rules: https://aka.ms/AgentathonRules
 
 | Item | Where |
 | --- | --- |
-| This code (Ignite Chat snapshot) | this GitHub repo |
+| This code (Ignite Chat + Foundry slice) | this GitHub repo |
 | Extraction agent | https://github.com/Razor2296/IgniteAPI |
-| Architecture | README mermaid + `docs/architecture.drawio` + API drawio in IgniteAPI |
-| Demo video ~4 min | problem → live Chat+API → Foundry / ACA on screen |
+| Architecture | README diagram + `docs/architecture.drawio` + API drawio in IgniteAPI |
+| Demo video ~4 min | problem → Chat → Foundry Agents/Tracing/Evals → optional ACA |
 | Founderz form | category, description, repo URL, diagram, video |
 
-## Foundry slice (close Architect gaps)
+## Foundry slice (Architect checkboxes)
 
-On project **juliancuray-7914** ([ai.azure.com/nextgen](https://ai.azure.com/nextgen)):
+On project **`juliancuray-7914`** ([ai.azure.com/nextgen](https://ai.azure.com/nextgen)) — use deployment **`gpt-5-mini`**:
 
 ```powershell
 cd foundry
 copy .env.example .env
-python agents.py
-python monitor.py
-python evaluate.py
-python workflow.py
+# PROJECT_CONNECTION_STRING = project endpoint from Foundry Overview
+python agents.py      # Agents tab
+python monitor.py     # Tracing tab (App Insights linked)
+python evaluate.py    # Evaluations tab (or upload eval/eval_portal.jsonl)
+python workflow.py    # workflow agent graph
 ```
 
-Judges should see Agents, Tracing, Evaluations, and the workflow graph. Details: [foundry/README.md](../foundry/README.md).
+Details: [foundry/README.md](../foundry/README.md). CI already runs `python test_tools.py` offline.
 
 ## Demo script (speak this)
 
-1. “Level 3 Architect. Two agents on Azure: Ignite Chat orchestrates, Ignite API extracts, Foundry hosts the model.”  
-2. Drop a real PDF. Show extract + answer.  
-3. Switch to [ai.azure.com](https://ai.azure.com/) → `foundryignitechatsiu`.  
-4. Optional: ACA revision for `ignite-api`.  
-5. One telemetry/token line. End.
+1. “Level 3 Architect. Ignite Chat + Ignite API on Azure; Foundry Agent Service for design, tracing, evals, and multi-agent workflow.”  
+2. Desktop: drop a real PDF → extract → answer (Innovation / Usability).  
+3. Foundry **`juliancuray-7914`**: Agents (`ignite-document-agent`, `ignite-orchestrator-agent`, workflow) → Tracing → Evaluations.  
+4. Optional: Chat models on `foundryignitechatsiu` + ACA `ignite-api` (product runtime).  
+5. Stop. No Autopilot roadmap.
 
 ## Do not
 
 - Paste the Google Devpost text.  
 - Promise Autopilot.  
-- Show the wrong Foundry project (`juliancuray-7914` or `igniteapifoundry2296` as if it were Chat’s `gpt-4.1-mini`). Chat models live on **`foundryignitechatsiu`**.
+- Show only classic OpenAI deployments and call that “Agent Service.” Judges want Agents / Tracing / Evaluations.

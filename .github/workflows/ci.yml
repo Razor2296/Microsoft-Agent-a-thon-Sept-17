@@ -1,48 +1,51 @@
-name: Ignite Chat Checks
+name: Contest checks
 
-# PR check #1 (with build-windows-installer). Merge to main → deploy-aca.yml only.
+# Public Agent-a-thon snapshot — no ACR/ACA deploy (see .github/CONTEST-CI.md).
 on:
+  push:
+    branches: [main]
   pull_request:
-    branches: [main, Develop]
-    paths:
-      - "app/**"
-      - "scripts/ci/**"
-      - ".github/workflows/ci.yml"
-      - ".github/workflows/deploy-aca.yml"
-      - ".github/workflows/build-acr.yml"
-      - ".github/workflows/build-windows-installer.yml"
+    branches: [main]
+  workflow_dispatch:
 
 permissions:
   contents: read
 
 jobs:
-  ignitechat-ruff-pytest:
+  chat-unit:
     name: Ignite Chat — Ruff & Pytest
     runs-on: ubuntu-latest
     defaults:
       run:
         working-directory: app
-
     steps:
-      - name: Checkout
-        uses: actions/checkout@v4
-
-      - name: Set up Python
-        uses: actions/setup-python@v5
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
         with:
           python-version: "3.12"
-
       - name: Install dependencies
         run: |
           python -m pip install --upgrade pip
           pip install -r requirements-server.txt
           pip install ruff pytest pytest-mock
-
-      - name: Ruff lint (P2 isolation surface)
+      - name: Ruff lint (isolation surface)
         run: |
           ruff check server/session_store.py backend/core/runtime_identity.py backend/integrations/office_extract.py
-
       - name: Unit tests
         env:
           PYTHONPATH: .
         run: python -m pytest tests/unit/ -q --tb=short
+
+  foundry-tools:
+    name: Foundry slice — offline tool tests
+    runs-on: ubuntu-latest
+    defaults:
+      run:
+        working-directory: foundry
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+      - name: Offline golden-set tool tests
+        run: python test_tools.py

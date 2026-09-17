@@ -1,10 +1,9 @@
 name: Build Windows Installer
 
-# PR check only (with ci.yml). Artifact name includes github.sha.
-# Manual rebuild: Actions → workflow_dispatch.
+# Optional contest artifact. Manual or PR only — does not deploy Azure.
 on:
   pull_request:
-    branches: [main, Develop]
+    branches: [main]
     paths:
       - "app/**"
       - "packaging/**"
