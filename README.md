@@ -108,7 +108,7 @@ Lab scenarios from [FrontierWeekHack](https://github.com/microsoft/FrontierWeekH
 
 Student / Foundry access: [Azure for Students](https://azure.microsoft.com/en-us/free/students) · [AI Foundry](https://azure.microsoft.com/en-us/products/ai-foundry/) · [ai.azure.com/nextgen](https://ai.azure.com/nextgen)
 
-CI on this repo: [.github/CONTEST-CI.md](.github/CONTEST-CI.md) — pytest + Foundry offline tests; **no** ACA/ACR deploy (that stays in IgniteChat).
+CI on this repo: [.github/CONTEST-CI.md](.github/CONTEST-CI.md) — pytest + Foundry offline tests. ACA deploy is **manual only** (`workflow_dispatch`) with the same **device code** login as IgniteChat (no push-triggered ACR).
 
 ## Run locally (Chat)
 

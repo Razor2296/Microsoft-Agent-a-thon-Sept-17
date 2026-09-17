@@ -1,22 +1,29 @@
 # Contest CI — Microsoft Agent-a-thon snapshot
 
-This public repo is a **Founderz / Level 3 Architect** submission. It is **not** the PAYG production pipeline.
+This public repo is a **Founderz / Level 3 Architect** submission. It is **not** the automatic PAYG production pipeline.
 
-| Workflow | What it does | Secrets needed |
+| Workflow | Trigger | Secrets |
 | --- | --- | --- |
-| `ci.yml` | Chat pytest + Foundry offline tool tests | none |
-| `build-windows-installer.yml` | Optional Windows installer artifact | none |
+| `ci.yml` | push/PR | none — Chat pytest + Foundry offline tests |
+| `build-windows-installer.yml` | PR / manual | none |
+| `deploy-aca.yml` | **workflow_dispatch only** | optional `ACR_*`; Azure via **device code** (same as IgniteChat) or `AZURE_CREDENTIALS` |
 
-**Removed on purpose:** `deploy-aca.yml`, `build-acr.yml` — those push to `igniteapisiuacr` / Container Apps and need `ACR_*` (and Azure login). They live in [IgniteChat](https://github.com/Razor2296/IgniteChat).
+**Why manual deploy?** Push-triggered ACA deploy failed here with `Username and password required` (no ACR secrets on this public fork). Production auto-deploy stays on [IgniteChat](https://github.com/Razor2296/IgniteChat).
+
+## Device code (same as Ignite Chat)
+
+1. Actions → **Deploy Ignite Chat ACA (PAYG) — manual** → Run workflow.  
+2. Open the **Azure login** step log.  
+3. Copy the code → https://microsoft.com/devicelogin (SIU MFA/passkey OK, up to ~15 min).  
+4. Job continues with `scripts/ci/azure-login-gh.sh` + `deploy-ignitechat-aca.sh`.
+
+If `AZURE_CREDENTIALS` (SP JSON) is set, the workflow uses SP instead of device code.
 
 ## Foundry (contest plane)
-
-Run on your machine after `az login`, project **`juliancuray-7914`**:
 
 ```powershell
 cd foundry
 copy .env.example .env
-# set PROJECT_CONNECTION_STRING + MODEL_DEPLOYMENT_NAME=gpt-5-mini
 pip install -r requirements.txt
 python test_tools.py
 python agents.py
@@ -25,4 +32,4 @@ python evaluate.py
 python workflow.py
 ```
 
-Details: [foundry/README.md](../foundry/README.md).
+Project: **`juliancuray-7914`**. Details: [foundry/README.md](../foundry/README.md).

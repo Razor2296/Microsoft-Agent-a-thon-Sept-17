@@ -1,0 +1,84 @@
+# Manual only — same device-code Azure login as IgniteChat.
+# Never runs on push (this public contest snapshot has no ACR/Azure secrets by default).
+name: Deploy Ignite Chat ACA (PAYG) — manual
+
+on:
+  workflow_dispatch:
+    inputs:
+      image_tag:
+        description: "ACR tag to deploy (default: latest already in PAYG ACR)"
+        required: false
+        default: "latest"
+
+permissions:
+  contents: read
+
+env:
+  ACR_LOGIN_SERVER: igniteapisiuacr.azurecr.io
+  IMAGE_NAME: ignitechat-api
+  CONTAINER_APP_NAME: ignitechat-api
+  RESOURCE_GROUP: IgniteAPI
+  KEY_VAULT_NAME: kvignitechatsiu
+  KEY_VAULT_URI: https://kvignitechatsiu.vault.azure.net/
+  AZURE_SUBSCRIPTION_ID: 4a614b14-fa98-4088-b2ec-dd6e3cc593bd
+  AZURE_TENANT_ID: 19b73b1f-8603-4b51-ac82-5b17f03d2820
+  FOUNDRY_CHAT_ENDPOINT: https://foundryignitechatsiu-87996.openai.azure.com/openai/v1
+  IGNITE_EXTRACTION_API_URL: https://ignite-api.orangefield-53e31d49.eastus2.azurecontainerapps.io
+  DEVICE_LOGIN_URL: https://microsoft.com/devicelogin
+  MFA_WAIT_SECONDS: "900"
+
+jobs:
+  deploy-aca:
+    runs-on: ubuntu-latest
+    timeout-minutes: 45
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Resolve Azure auth mode
+        id: auth
+        run: |
+          if [ -n "${{ secrets.AZURE_CREDENTIALS }}" ]; then
+            echo "mode=sp-json" >> "$GITHUB_OUTPUT"
+          else
+            echo "mode=device" >> "$GITHUB_OUTPUT"
+            echo "::notice title=Device login required::Open the Azure login step log, copy the code, visit https://microsoft.com/devicelogin (up to ${MFA_WAIT_SECONDS}s)."
+          fi
+
+      - name: Azure login
+        env:
+          AZURE_AUTH_MODE: ${{ steps.auth.outputs.mode }}
+          AZURE_CREDENTIALS: ${{ secrets.AZURE_CREDENTIALS }}
+          DEVICE_LOGIN_URL: ${{ env.DEVICE_LOGIN_URL }}
+          MFA_WAIT_SECONDS: ${{ env.MFA_WAIT_SECONDS }}
+        run: |
+          chmod +x scripts/ci/azure-login-gh.sh scripts/ci/deploy-ignitechat-aca.sh
+          bash scripts/ci/azure-login-gh.sh
+
+      - name: Deploy ignitechat-api (env + Key Vault refs)
+        env:
+          ACR_USERNAME: ${{ secrets.ACR_USERNAME }}
+          ACR_PASSWORD: ${{ secrets.ACR_PASSWORD }}
+          GITHUB_SHA: ${{ github.sha }}
+          IMAGE_TAG: ${{ github.event.inputs.image_tag || 'latest' }}
+        run: bash scripts/ci/deploy-ignitechat-aca.sh
+
+      - name: Summary
+        run: |
+          set -euo pipefail
+          az account set --subscription "${AZURE_SUBSCRIPTION_ID}"
+          FQDN=$(az containerapp show \
+            --name "${CONTAINER_APP_NAME}" \
+            --resource-group "${RESOURCE_GROUP}" \
+            --query "properties.configuration.ingress.fqdn" -o tsv)
+          REV=$(az containerapp show \
+            --name "${CONTAINER_APP_NAME}" \
+            --resource-group "${RESOURCE_GROUP}" \
+            --query "properties.latestRevisionName" -o tsv)
+          {
+            echo "### Manual PAYG deploy (contest snapshot)"
+            echo "- Image: \`${ACR_LOGIN_SERVER}/${IMAGE_NAME}:${{ github.event.inputs.image_tag || 'latest' }}\`"
+            echo "- API: https://${FQDN}"
+            echo "- Health: https://${FQDN}/health"
+            echo "- Revision: \`${REV}\`"
+            echo "- Auth: device code (or AZURE_CREDENTIALS if set)"
+          } >> "$GITHUB_STEP_SUMMARY"
