@@ -107,6 +107,8 @@ Lab scenarios from [FrontierWeekHack](https://github.com/microsoft/FrontierWeekH
 
 ---
 
+See also [.github/CONTEST-CI.md](.github/CONTEST-CI.md) — this snapshot does **not** deploy ACA/ACR (no PAYG secrets on purpose).
+
 ## Run locally (Chat)
 
 ```bat
