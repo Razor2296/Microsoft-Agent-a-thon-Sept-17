@@ -1,0 +1,8 @@
+Ignite contest fixture DOC-002 — synthetic vendor invoice (no real PHI).
+Vendor: Northwind Supplies
+Amount USD: 1840.50
+Currency: USD
+Due date: 2026-10-01
+Pages: 1
+Completeness target: 88
+Channel: invoice / Invoice_Standard

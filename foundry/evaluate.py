@@ -42,7 +42,6 @@ def main() -> int:
         return 1
 
     from azure.ai.projects import AIProjectClient
-    from azure.ai.projects.models import DataSourceConfigCustom
     from azure.identity import DefaultAzureCredential
 
     client = AIProjectClient(
@@ -59,15 +58,16 @@ def main() -> int:
 
     agent = next(a for a in client.agents.list() if a.name == DOCUMENT_AGENT)
 
-    data_source_config = DataSourceConfigCustom(
-        type="custom",
-        item_schema={
+    # Plain dict: DataSourceConfigCustom was removed in azure-ai-projects 2.x
+    data_source_config = {
+        "type": "custom",
+        "item_schema": {
             "type": "object",
             "properties": {"query": {"type": "string"}},
             "required": ["query"],
         },
-        include_sample_schema=True,
-    )
+        "include_sample_schema": True,
+    }
     testing_criteria = [
         {
             "type": "azure_ai_evaluator",

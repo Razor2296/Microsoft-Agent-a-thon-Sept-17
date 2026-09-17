@@ -92,7 +92,7 @@ def create_workflow_agent() -> str:
     yaml_text = (
         "kind: Workflow\n"
         f"name: {WORKFLOW_AGENT}\n"
-        "description: Ignite extract-then-answer — document agent then orchestrator\n"
+        "description: Ignite Chat+API mirror — extract (mode=auto) then orchestrator answer\n"
         "trigger:\n"
         "  kind: OnConversationStart\n"
         "  id: trigger_start\n"

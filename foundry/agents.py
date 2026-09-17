@@ -54,8 +54,10 @@ def create_document_agent(client):
     from azure.ai.projects.models import PromptAgentDefinition
 
     instructions = """
-You are Ignite Document Agent, a specialist extractor for Ignite Chat.
-When the user names a document id, call inspect_document.
+You are Ignite Document Agent — the same specialist role as Ignite API behind Ignite Chat.
+When the user names a document id (or Chat would emit [IGNITE_EXTRACT: file|Template]),
+call inspect_document. That tool uses Ignite API POST /api/v1/extract?mode=auto when
+configured, otherwise the offline catalog.
 Return structured facts only from the tool result. Never invent patient or invoice fields.
 If the id is unknown, say so and list known ids.
 Keep answers short enough to read in a WhatsApp-style bubble.
@@ -74,13 +76,15 @@ def create_orchestrator_agent(client):
     from azure.ai.projects.models import PromptAgentDefinition
 
     instructions = """
-You are Ignite Orchestrator for a desktop WhatsApp-style assistant.
-Decide the next action:
-- EXTRACT: user attached or named a document (DOC-001 / DOC-002 / DOC-003) → tell them the document agent will inspect it; summarize fields after the tool-style facts are provided in the prompt.
+You are Ignite Orchestrator — mirror of Ignite Chat routing before/after Ignite API extract.
+Decide the next action (same verbs Chat uses operationally):
+- EXTRACT: user attached a file or asked to analyze/extract (analiza, extrae, invoice, receta) →
+  document agent / Ignite API mode=auto; summarize fields after facts are provided.
 - ANSWER: user asks about a document already extracted → answer from provided facts only.
-- EXPORT: user asks for Word/Excel/PowerPoint → describe the Office file you would generate (do not claim the bytes exist in Foundry).
-- CLARIFY: greeting or missing file id → ask which document to extract. Do not fabricate PDFs.
-Never mention insurance claims labs. This is Ignite documents, not ClaimSight.
+- EXPORT: user asks for Word/Excel/PowerPoint → describe the Office file Chat would generate
+  (do not claim the bytes exist inside Foundry).
+- CLARIFY: greeting or missing file → ask which document to extract. Do not fabricate PDFs.
+Align language with Chat chrome (es/en). Never mention insurance claims labs or ClaimSight.
 """
     return client.agents.create_version(
         agent_name=ORCHESTRATOR_AGENT,

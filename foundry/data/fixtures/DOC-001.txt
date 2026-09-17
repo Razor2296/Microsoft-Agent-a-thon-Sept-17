@@ -1,0 +1,7 @@
+Ignite contest fixture DOC-001 — synthetic outpatient order (no real PHI).
+Patient: SAMPLE PATIENT
+Diagnosis: Acute rhinopharyngitis
+Medication: Benzydamine spray 0.3%
+Pages: 2
+Completeness target: 92
+Channel: medical_order / Medical_Prescription

@@ -1,0 +1,6 @@
+Ignite contest fixture DOC-003 — synthetic research PDF excerpt (no real PHI).
+Topic: Evolution of data storage architectures
+Pages: 18
+Completeness target: 70
+needs_full_read: true
+Channel: research_pdf
