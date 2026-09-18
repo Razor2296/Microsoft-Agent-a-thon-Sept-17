@@ -76,24 +76,25 @@ Runnable slice (Foundry project **`juliancuray-7914`**, not the classic OpenAI r
 
 | Capability | In Foundry | Script |
 | --- | --- | --- |
-| **1. Agent design** | `ignite-document-agent` (tool `inspect_document`) + `ignite-orchestrator-agent` | `foundry/agents.py` |
-| **2. Observability** | Tracing tab + Application Insights | `foundry/monitor.py` |
+| **1. Agent design** | Orchestrator (**Plan JSON brain**) + document + media agents | `foundry/agents.py` |
+| **2. Observability** | Tracing + `trace_tags` (`modality:*`, `intent:*`) | `foundry/monitor.py`, `brain.py` |
 | **3. Quality evaluations** | Evaluations hub + `foundry/eval/eval_portal.jsonl` | `foundry/evaluate.py` |
-| **4. Multi-agent orchestration** | `ignite-document-workflow` (workflow kind) + SDK pipeline | `foundry/workflow.py` |
+| **4. Multi-agent orchestration** | `brain.py` (Plan → tools → reply) + `ignite-document-workflow` | `foundry/workflow.py` |
 
-Desktop Chat still has its own telemetry and pytest; that is the product. The **contest-visible** plane is `foundry/`. Ignite API wiring is later — the document agent uses synthetic `foundry/data/documents.json`.
+**Foundry is the brain:** the orchestrator’s Plan JSON decides modality and steps; specialists only execute. Offline demo: `cd foundry && python brain.py`. Paso 3 document: [docs/PASO3_WORKFLOW.md](docs/PASO3_WORKFLOW.md).
 
-Lab scenarios from [FrontierWeekHack](https://github.com/microsoft/FrontierWeekHack) taught the Foundry skills; this submission **applies them to our enterprise-shaped workflow**, which is what the hosts asked.
+This contest repo does **not** change Ignite Chat or Ignite API source — they remain the product reference.
+
+Lab scenarios from [FrontierWeekHack](https://github.com/microsoft/FrontierWeekHack) taught the Foundry skills; this submission **applies them to our enterprise-shaped workflow**.
 
 ---
 
-## Demo (≈ 4 minutes, Founderz video)
+## Demo (≤ 3 minutes, Founderz Paso 3 video)
 
-1. **Problem** — a real PDF (prescription / invoice), not a toy prompt.  
-2. **Usability** — Ignite Chat: attach → extract (API on ACA) → ask → export Office.  
-3. **Foundry Agent Service** — project `juliancuray-7914`: Agents + Tracing + Evaluations + workflow (after `foundry/*.py`).  
-4. **Product models (optional)** — `foundryignitechatsiu` + ACA `ignite-api`.  
-5. Stop. No Autopilot roadmap.
+1. **Problem** — messy PDF / photo / voice note → need a business answer.  
+2. **Brain** — show Plan JSON (`python brain.py` or Foundry orchestrator).  
+3. **Workflow + Tracing + Evals** on `juliancuray-7914`.  
+4. Stop. No Autopilot. No live PHI.
 
 ---
 

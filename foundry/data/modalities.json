@@ -1,0 +1,41 @@
+{
+  "media": [
+    {
+      "media_id": "MED-IMG-001",
+      "modality": "image",
+      "title": "Lab receipt photo — sample",
+      "caption": "Printed receipt on a desk; vendor Northwind; amount visible as 1840.50 USD.",
+      "fields": {
+        "detected_type": "invoice_photo",
+        "suggested_doc_id": "DOC-002",
+        "ocr_confidence": 0.91,
+        "phi_redacted": true
+      }
+    },
+    {
+      "media_id": "MED-AUD-001",
+      "modality": "audio",
+      "title": "Clinic voice note — sample",
+      "caption": "Spanish voice note summarizing an outpatient order for SAMPLE PATIENT.",
+      "fields": {
+        "language": "es-MX",
+        "duration_sec": 42,
+        "suggested_doc_id": "DOC-001",
+        "transcript_excerpt": "Paciente de muestra, rinitis aguda, spray benzidamina.",
+        "phi_redacted": true
+      }
+    },
+    {
+      "media_id": "MED-VID-001",
+      "modality": "video",
+      "title": "Screen recording — sample",
+      "caption": "Short screen capture scrolling a research PDF on storage architectures.",
+      "fields": {
+        "duration_sec": 75,
+        "suggested_doc_id": "DOC-003",
+        "keyframe_topics": ["object storage", "lakehouse"],
+        "phi_redacted": true
+      }
+    }
+  ]
+}

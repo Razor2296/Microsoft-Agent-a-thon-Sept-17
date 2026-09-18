@@ -26,6 +26,8 @@ cd foundry
 copy .env.example .env
 pip install -r requirements.txt
 python test_tools.py
+python test_brain.py
+python brain.py
 python agents.py
 python monitor.py
 python evaluate.py

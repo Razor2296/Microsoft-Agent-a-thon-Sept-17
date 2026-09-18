@@ -48,4 +48,6 @@ jobs:
         with:
           python-version: "3.12"
       - name: Offline golden-set tool tests
-        run: python test_tools.py
+        run: |
+          python test_tools.py
+          python test_brain.py

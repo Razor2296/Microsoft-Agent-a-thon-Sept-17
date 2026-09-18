@@ -1,8 +1,9 @@
 """
-Level 3 — Agent design: two Foundry agents for Ignite.
+Level 3 — Agent design: Foundry agents for Ignite (Architect plane).
 
-  ignite-document-agent   specialist (inspect_document tool)
-  ignite-orchestrator-agent  routes extract vs chat vs export
+  ignite-orchestrator-agent  BRAIN — emits Plan JSON (modality + steps)
+  ignite-document-agent      specialist (inspect_document tool)
+  ignite-media-agent         specialist (describe_media tool)
 
 Usage (from this folder, after az login):
   copy .env.example .env   # fill PROJECT_CONNECTION_STRING
@@ -18,6 +19,8 @@ from pathlib import Path
 
 from dotenv import load_dotenv
 
+from media_tools import DESCRIBE_MEDIA_TOOL, describe_media, load_media
+from plan_schema import PLAN_JSON_SCHEMA_HINT
 from tools import INSPECT_DOCUMENT_TOOL, inspect_document, load_documents
 
 FOUNDRY_DIR = Path(__file__).resolve().parent
@@ -27,15 +30,27 @@ PROJECT_CONNECTION_STRING = (os.getenv("PROJECT_CONNECTION_STRING") or "").strip
 MODEL_DEPLOYMENT_NAME = os.getenv("MODEL_DEPLOYMENT_NAME", "gpt-5-mini").strip()
 DOCUMENT_AGENT = os.getenv("IGNITE_DOCUMENT_AGENT", "ignite-document-agent").strip()
 ORCHESTRATOR_AGENT = os.getenv("IGNITE_ORCHESTRATOR_AGENT", "ignite-orchestrator-agent").strip()
+MEDIA_AGENT = os.getenv("IGNITE_MEDIA_AGENT", "ignite-media-agent").strip()
 
 
-def _function_tool():
+def _inspect_tool():
     from azure.ai.projects.models import FunctionTool
 
     return FunctionTool(
         name=INSPECT_DOCUMENT_TOOL["name"],
         description=INSPECT_DOCUMENT_TOOL["description"],
         parameters=INSPECT_DOCUMENT_TOOL["parameters"],
+        strict=False,
+    )
+
+
+def _media_tool():
+    from azure.ai.projects.models import FunctionTool
+
+    return FunctionTool(
+        name=DESCRIBE_MEDIA_TOOL["name"],
+        description=DESCRIBE_MEDIA_TOOL["description"],
+        parameters=DESCRIBE_MEDIA_TOOL["parameters"],
         strict=False,
     )
 
@@ -54,20 +69,39 @@ def create_document_agent(client):
     from azure.ai.projects.models import PromptAgentDefinition
 
     instructions = """
-You are Ignite Document Agent — the same specialist role as Ignite API behind Ignite Chat.
-When the user names a document id (or Chat would emit [IGNITE_EXTRACT: file|Template]),
-call inspect_document. That tool uses Ignite API POST /api/v1/extract?mode=auto when
-configured, otherwise the offline catalog.
+You are Ignite Document Agent — specialist extractor for the Ignite multi-agent system.
+When the user (or orchestrator plan) names a document id, call inspect_document.
 Return structured facts only from the tool result. Never invent patient or invoice fields.
 If the id is unknown, say so and list known ids.
 Keep answers short enough to read in a WhatsApp-style bubble.
+You do NOT decide routing — the orchestrator Plan JSON already chose EXTRACT.
 """
     return client.agents.create_version(
         agent_name=DOCUMENT_AGENT,
         definition=PromptAgentDefinition(
             model=MODEL_DEPLOYMENT_NAME,
             instructions=instructions,
-            tools=[_function_tool()],
+            tools=[_inspect_tool()],
+        ),
+    )
+
+
+def create_media_agent(client):
+    from azure.ai.projects.models import PromptAgentDefinition
+
+    instructions = """
+You are Ignite Media Agent — specialist for image, audio, and video sample assets.
+When given a media id (MED-IMG-*, MED-AUD-*, MED-VID-*), call describe_media.
+Summarize caption + fields only from the tool. Never invent PHI.
+Suggest linking to a document id when fields.suggested_doc_id is present.
+You do NOT decide routing — the orchestrator Plan JSON already chose MEDIA_DESCRIBE.
+"""
+    return client.agents.create_version(
+        agent_name=MEDIA_AGENT,
+        definition=PromptAgentDefinition(
+            model=MODEL_DEPLOYMENT_NAME,
+            instructions=instructions,
+            tools=[_media_tool()],
         ),
     )
 
@@ -75,16 +109,22 @@ Keep answers short enough to read in a WhatsApp-style bubble.
 def create_orchestrator_agent(client):
     from azure.ai.projects.models import PromptAgentDefinition
 
-    instructions = """
-You are Ignite Orchestrator — mirror of Ignite Chat routing before/after Ignite API extract.
-Decide the next action (same verbs Chat uses operationally):
-- EXTRACT: user attached a file or asked to analyze/extract (analiza, extrae, invoice, receta) →
-  document agent / Ignite API mode=auto; summarize fields after facts are provided.
-- ANSWER: user asks about a document already extracted → answer from provided facts only.
-- EXPORT: user asks for Word/Excel/PowerPoint → describe the Office file Chat would generate
-  (do not claim the bytes exist inside Foundry).
-- CLARIFY: greeting or missing file → ask which document to extract. Do not fabricate PDFs.
-Align language with Chat chrome (es/en). Never mention insurance claims labs or ClaimSight.
+    instructions = f"""
+You are Ignite Orchestrator — the BRAIN of the Foundry workflow.
+Your ONLY job on the first turn is to emit a structured Plan JSON that downstream
+agents and the local runner execute. Do not call tools yourself.
+
+{PLAN_JSON_SCHEMA_HINT}
+
+Routing rules (mirror Ignite Chat operational verbs):
+- Document attach / extract / analyze / DOC-*** → modality=document, intent=EXTRACT,
+  steps: inspect_document then synthesize.
+- Image / audio / video / MED-*** → modality=image|audio|video, intent=MEDIA_DESCRIBE,
+  steps: describe_media then synthesize.
+- Export Word/Excel/PowerPoint → intent=EXPORT, action export_office.
+- Greeting / missing id → intent=CLARIFY.
+Align user_message_* language with the user. Never mention ClaimSight or insurance labs.
+Trace tags MUST include modality:* and intent:* for Foundry Tracing filters.
 """
     return client.agents.create_version(
         agent_name=ORCHESTRATOR_AGENT,
@@ -114,6 +154,9 @@ def _run_with_tools(openai_client, agent_name: str, input_text: str) -> str:
             if item.name == "inspect_document":
                 args = json.loads(item.arguments or "{}")
                 result = inspect_document(args.get("doc_id") or "")
+            elif item.name == "describe_media":
+                args = json.loads(item.arguments or "{}")
+                result = describe_media(args.get("media_id") or "")
             else:
                 result = json.dumps({"error": f"Unknown tool '{item.name}'"})
             outputs.append(
@@ -142,24 +185,34 @@ def main() -> int:
     openai_client = client.get_openai_client()
     try:
         doc_agent = create_document_agent(client)
+        media_agent = create_media_agent(client)
         orch = create_orchestrator_agent(client)
         print(f"Created {doc_agent.name} v{doc_agent.version}")
+        print(f"Created {media_agent.name} v{media_agent.version}")
         print(f"Created {orch.name} v{orch.version}")
 
         ids = [d["doc_id"] for d in load_documents()]
-        sample = inspect_document("DOC-001")
+        media_ids = [m["media_id"] for m in load_media()]
         print("\n--- Document agent ---")
         print(_run_with_tools(openai_client, DOCUMENT_AGENT, f"Extract DOC-001. Known ids: {ids}"))
-        print("\n--- Orchestrator ---")
+        print("\n--- Media agent ---")
+        print(
+            _run_with_tools(
+                openai_client,
+                MEDIA_AGENT,
+                f"Describe MED-IMG-001. Known ids: {media_ids}",
+            )
+        )
+        print("\n--- Orchestrator (Plan JSON) ---")
         print(
             _run_with_tools(
                 openai_client,
                 ORCHESTRATOR_AGENT,
-                "User dropped a medical PDF labelled DOC-001. Route EXTRACT then summarize.\n"
-                f"TOOL_FACTS:\n{sample}",
+                "User dropped medical PDF DOC-001 and said: extrae la receta.",
             )
         )
         print("\nAgents stay in Foundry → Build → Agents (do not delete).")
+        print("Next: python brain.py (offline) or FOUNDRY_BRAIN_LIVE=true python -c \"...\"")
     finally:
         client.close()
     return 0
