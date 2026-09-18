@@ -24,7 +24,7 @@ load_dotenv(FOUNDRY_DIR / ".env")
 PROJECT_CONNECTION_STRING = (os.getenv("PROJECT_CONNECTION_STRING") or "").strip()
 DOCUMENT_AGENT = os.getenv("IGNITE_DOCUMENT_AGENT", "ignite-document-agent").strip()
 ORCHESTRATOR_AGENT = os.getenv("IGNITE_ORCHESTRATOR_AGENT", "ignite-orchestrator-agent").strip()
-MEDIA_AGENT = os.getenv("IGNITE_MEDIA_AGENT", "ignite-media-agent").strip()
+MEDIA_AGENT = os.getenv("IGNITE_MEDIA_AGENT", "ignite-image-agent").strip()
 WORKFLOW_AGENT = os.getenv("IGNITE_WORKFLOW_AGENT", "ignite-document-workflow").strip()
 
 

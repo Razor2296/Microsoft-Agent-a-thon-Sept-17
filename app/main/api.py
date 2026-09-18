@@ -3117,7 +3117,19 @@ class PyWebViewApi:
                     language=language,
                 )
                 if foundry_note and foundry_note.get("message"):
+                    logger.info(
+                        "FOUNDRY post-extract attached to chrome live=%s source=%s",
+                        foundry_note.get("foundry_live"),
+                        foundry_note.get("foundry_source"),
+                    )
                     chrome = f"{chrome}\n\n{foundry_note['message']}" if chrome else foundry_note["message"]
+                else:
+                    logger.warning(
+                        "FOUNDRY post-extract returned nothing after '%s' — "
+                        "check FOUNDRY_ORCHESTRATION_ENABLED / PROJECT_CONNECTION_STRING "
+                        "in foundry/.env (Agent-a-thon repo).",
+                        matched_name,
+                    )
                 return True, chrome, None
 
             return False, "", IgniteAPIClient.user_failure_hint(

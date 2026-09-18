@@ -48,9 +48,11 @@ cd ..
 .\run_app.bat
 ```
 
-In chat: `Extrae DOC-001` → open Foundry → **ignite-document-workflow** / **ignite-document-agent** / **ignite-media-agent** → **Traces** (not `ignite-image-agent`).
+In chat: `Extrae DOC-001` → open Foundry → **ignite-document-workflow** / **ignite-image-agent** / **ignite-document-agent** → **Traces**.
 
 If Chat shows `⚠ NO LLEGÓ A FOUNDRY`, fix `.env` / `az login` — offline Plan alone never updates Traces.
+
+Look for console lines starting with `FOUNDRY ` — if you never see them, you are not running the Agent-a-thon snapshot (or `.env` has no project endpoint).
 
 ## Offline / CI
 

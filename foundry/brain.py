@@ -24,7 +24,7 @@ load_dotenv(FOUNDRY_DIR / ".env")
 PROJECT_CONNECTION_STRING = (os.getenv("PROJECT_CONNECTION_STRING") or "").strip()
 ORCHESTRATOR_AGENT = os.getenv("IGNITE_ORCHESTRATOR_AGENT", "ignite-orchestrator-agent").strip()
 DOCUMENT_AGENT = os.getenv("IGNITE_DOCUMENT_AGENT", "ignite-document-agent").strip()
-MEDIA_AGENT = os.getenv("IGNITE_MEDIA_AGENT", "ignite-media-agent").strip()
+MEDIA_AGENT = os.getenv("IGNITE_MEDIA_AGENT", "ignite-image-agent").strip()
 
 _DOC_ID_RE = re.compile(r"\bDOC-\d{3}\b", re.IGNORECASE)
 _MEDIA_ID_RE = re.compile(r"\bMED-(?:IMG|AUD|VID)-\d{3}\b", re.IGNORECASE)

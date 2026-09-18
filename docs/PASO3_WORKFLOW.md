@@ -25,7 +25,7 @@ Ignite ya resuelve eso en producto (Chat orquesta, API extrae). En Foundry model
 | --- | --- | --- | --- | --- |
 | **ignite-orchestrator-agent** | **Cerebro** — emite Plan JSON (modalidad + intent + pasos) | ninguna (solo planifica) | turno de usuario | Plan JSON + reply final |
 | **ignite-document-agent** | Especialista documentos | `inspect_document` | `doc_id` (DOC-001…) | campos estructurados |
-| **ignite-media-agent** | Especialista imagen/audio/video | `describe_media` | `media_id` (MED-…) | caption + tags |
+| **ignite-image-agent** | Especialista imagen/audio/video | `describe_media` | `media_id` (MED-…) | caption + tags |
 | **ignite-document-workflow** | Grafo Foundry (kind: workflow) | orquesta los tres | conversación | reply de negocio |
 
 ```text
@@ -76,8 +76,8 @@ MODEL_DEPLOYMENT_NAME=gemini-2.5-flash
 FOUNDRY_REFRESH_AGENTS=true
 
 run_app.bat
-# Chat: Extrae DOC-001  →  Foundry → ignite-document-workflow Traces
-# (NO abras ignite-image-agent — el media agent es ignite-media-agent)
+# Chat: Extrae DOC-001  →  Foundry → ignite-document-workflow / ignite-image-agent Traces
+# Console must show lines starting with "FOUNDRY " — if not, wrong repo or missing .env
 ```
 
 ---

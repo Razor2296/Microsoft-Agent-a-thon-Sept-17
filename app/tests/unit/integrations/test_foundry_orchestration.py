@@ -67,12 +67,32 @@ class TestFoundryOrchestrationGodPath(unittest.TestCase):
 
     def test_disabled_skips_both_hooks(self):
         os.environ["FOUNDRY_ORCHESTRATION_ENABLED"] = "false"
+        os.environ.pop("PROJECT_CONNECTION_STRING", None)
+        # Reset one-shot status log so enable check re-evaluates.
+        self.orch._STATUS_LOGGED = False
         self.assertIsNone(self.orch.maybe_run_foundry_turn("Extrae DOC-001"))
         self.assertIsNone(
             self.orch.notify_foundry_after_extract(
                 filename="a.pdf", template_name="Invoice_Standard"
             )
         )
+
+    def test_auto_enabled_when_project_set(self):
+        self.orch._STATUS_LOGGED = False
+        os.environ["FOUNDRY_ORCHESTRATION_ENABLED"] = "false"
+        os.environ["PROJECT_CONNECTION_STRING"] = (
+            "https://example.services.ai.azure.com/api/projects/x"
+        )
+        try:
+            self.assertTrue(self.orch.foundry_orchestration_enabled())
+        finally:
+            os.environ.pop("PROJECT_CONNECTION_STRING", None)
+            self.orch._STATUS_LOGGED = False
+
+    def test_default_media_agent_is_image_tab(self):
+        self.assertEqual(self.runtime.MEDIA_AGENT(), "ignite-image-agent")
+        self.assertIn("ignite-image-agent", self.runtime.MEDIA_AGENT_ALIASES())
+        self.assertIn("ignite-media-agent", self.runtime.MEDIA_AGENT_ALIASES())
 
     def test_runtime_traced_orchestration_offline(self):
         result = self.runtime.run_traced_orchestration(

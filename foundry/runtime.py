@@ -19,7 +19,16 @@ _READY = False
 _TRACING_READY = False
 
 DOCUMENT_AGENT = lambda: (os.getenv("IGNITE_DOCUMENT_AGENT") or "ignite-document-agent").strip()
-MEDIA_AGENT = lambda: (os.getenv("IGNITE_MEDIA_AGENT") or "ignite-media-agent").strip()
+# Portal tab users open is often "ignite-image-agent" — default there (alias: ignite-media-agent).
+MEDIA_AGENT = lambda: (os.getenv("IGNITE_MEDIA_AGENT") or "ignite-image-agent").strip()
+MEDIA_AGENT_ALIASES = lambda: [
+    a
+    for a in {
+        MEDIA_AGENT(),
+        (os.getenv("IGNITE_MEDIA_AGENT_ALIAS") or "ignite-media-agent").strip(),
+    }
+    if a
+]
 ORCHESTRATOR_AGENT = lambda: (os.getenv("IGNITE_ORCHESTRATOR_AGENT") or "ignite-orchestrator-agent").strip()
 WORKFLOW_AGENT = lambda: (os.getenv("IGNITE_WORKFLOW_AGENT") or "ignite-document-workflow").strip()
 # Foundry deployment name (Models + endpoints). Gemini first for Paso 3.
@@ -117,17 +126,19 @@ def _create_agents(client) -> None:
             tools=[inspect_tool],
         ),
     )
-    client.agents.create_version(
-        agent_name=MEDIA_AGENT(),
-        definition=PromptAgentDefinition(
-            model=MODEL(),
-            instructions=(
-                "You are Ignite Media Agent. Call describe_media for MED-* ids. "
-                "Summarize caption/fields only."
-            ),
-            tools=[media_tool],
+    media_def = PromptAgentDefinition(
+        model=MODEL(),
+        instructions=(
+            "You are Ignite Media/Image Agent. Call describe_media for MED-* ids. "
+            "Summarize caption/fields only."
         ),
+        tools=[media_tool],
     )
+    for media_name in MEDIA_AGENT_ALIASES():
+        client.agents.create_version(
+            agent_name=media_name,
+            definition=media_def,
+        )
     client.agents.create_version(
         agent_name=ORCHESTRATOR_AGENT(),
         definition=PromptAgentDefinition(
@@ -224,7 +235,7 @@ def ensure_agents_and_workflow(*, force: bool = False) -> bool:
             client = _client(preview=True)
             try:
                 names = {a.name for a in client.agents.list()}
-                needed = {DOCUMENT_AGENT(), MEDIA_AGENT(), ORCHESTRATOR_AGENT()}
+                needed = {DOCUMENT_AGENT(), ORCHESTRATOR_AGENT(), *MEDIA_AGENT_ALIASES()}
                 missing = needed - names
                 if missing or refresh:
                     logger.info(
@@ -298,8 +309,8 @@ def _respond_agent(openai_client, agent_name: str, text: str) -> str:
 def invoke_agent_pipeline(user_text: str) -> dict[str, Any] | None:
     """
     Live multi-agent orchestration under GenAI tracing.
-    Creates spans on ignite-orchestrator-agent, ignite-document-agent, ignite-media-agent
-    (open those tabs in Foundry → Agents → Traces — NOT ignite-image-agent).
+    Creates spans on ignite-orchestrator-agent, ignite-document-agent, ignite-image-agent
+    (open those tabs in Foundry → Agents → Traces).
     """
     if not _project():
         return None
@@ -568,9 +579,8 @@ def run_traced_orchestration(
             or (
                 "NO LLEGÓ A FOUNDRY (live vacío): revisa az login + endpoint + "
                 f"MODEL_DEPLOYMENT_NAME={model_name}. "
-                "Abre Traces en ignite-document-workflow / ignite-document-agent / "
-                "ignite-media-agent / ignite-orchestrator-agent "
-                "(NO ignite-image-agent) → Last day → Refresh."
+                "Abre Traces en ignite-document-workflow / ignite-image-agent / "
+                "ignite-document-agent / ignite-orchestrator-agent → Last day → Refresh."
             )
         )
     elif not insights:
