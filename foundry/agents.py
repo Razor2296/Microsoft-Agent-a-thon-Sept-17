@@ -212,7 +212,10 @@ def main() -> int:
             )
         )
         print("\nAgents stay in Foundry → Build → Agents (do not delete).")
-        print("Next: python brain.py (offline) or FOUNDRY_BRAIN_LIVE=true python -c \"...\"")
+        print(
+            "Chat auto-path: set FOUNDRY_ORCHESTRATION_ENABLED=true in app/.env — "
+            "runtime.py ensures agents/workflow and orchestrates under Traces on each turn."
+        )
     finally:
         client.close()
     return 0

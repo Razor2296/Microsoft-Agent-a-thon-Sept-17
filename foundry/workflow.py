@@ -42,6 +42,15 @@ def _client(*, preview: bool = False):
 
 
 def ensure_agents() -> None:
+    """Prefer runtime.ensure_agents_and_workflow (used by Chat). This is CLI fallback."""
+    try:
+        from runtime import ensure_agents_and_workflow
+
+        if ensure_agents_and_workflow(force=True):
+            print("Agents + workflow ensured via runtime.")
+            return
+    except Exception as exc:
+        print(f"runtime ensure failed ({exc}); checking list only...")
     print("Ensuring Foundry agents exist (run agents.py if this fails).")
     client = _client()
     names = {a.name for a in client.agents.list()}

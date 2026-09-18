@@ -138,7 +138,10 @@ from dotenv import load_dotenv
 
 from backend.integrations.ignite_api_client import IgniteAPIClient
 from backend.integrations.ignite_rag_transformer import extraction_to_rag_chunks
-from backend.integrations.foundry_orchestration import maybe_run_foundry_turn
+from backend.integrations.foundry_orchestration import (
+    maybe_run_foundry_turn,
+    notify_foundry_after_extract,
+)
 
 
 # Logger 
@@ -3106,6 +3109,15 @@ class PyWebViewApi:
                 chrome = _extract_success_chrome(
                     template_name, indexed_count, language, standalone=False
                 )
+                # Chat → Ignite API extract also fires Foundry Traces + workflow orchestration.
+                foundry_note = notify_foundry_after_extract(
+                    filename=matched_name,
+                    template_name=template_name,
+                    extraction=extraction_res if isinstance(extraction_res, dict) else None,
+                    language=language,
+                )
+                if foundry_note and foundry_note.get("message"):
+                    chrome = f"{chrome}\n\n{foundry_note['message']}" if chrome else foundry_note["message"]
                 return True, chrome, None
 
             return False, "", IgniteAPIClient.user_failure_hint(
