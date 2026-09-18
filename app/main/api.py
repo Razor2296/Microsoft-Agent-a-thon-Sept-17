@@ -138,6 +138,7 @@ from dotenv import load_dotenv
 
 from backend.integrations.ignite_api_client import IgniteAPIClient
 from backend.integrations.ignite_rag_transformer import extraction_to_rag_chunks
+from backend.integrations.foundry_orchestration import maybe_run_foundry_turn
 
 
 # Logger 
@@ -4017,6 +4018,44 @@ class PyWebViewApi:
             },
             save=True,
         )
+
+        # Contest / Architect path: Ignite turn → Foundry Traces + Plan/Workflow brain.
+        # Off by default (FOUNDRY_ORCHESTRATION_ENABLED). Does not replace product Chat repos.
+        foundry_out = maybe_run_foundry_turn(
+            text, processed_files, language=language
+        )
+        if foundry_out is not None:
+            reply = foundry_out.get("message") or ""
+            status = foundry_out.get("status") or "success"
+            self._append_history_message(
+                provider,
+                {
+                    "role": "assistant",
+                    "content": reply,
+                    "provider": provider,
+                    "foundry": True,
+                    "foundry_source": foundry_out.get("foundry_source"),
+                    "foundry_plan": foundry_out.get("foundry_plan"),
+                    "foundry_trace_tags": foundry_out.get("foundry_trace_tags"),
+                    "conversation_language": language,
+                    "timestamp": _get_time_str(),
+                    "iso_timestamp": _get_iso_timestamp(),
+                    "date": _get_date_str(),
+                    "from_mic": from_mic,
+                },
+                save=True,
+            )
+            return {
+                "status": status,
+                "message": reply,
+                "provider": provider,
+                "from_mic": from_mic,
+                "foundry": True,
+                "foundry_source": foundry_out.get("foundry_source"),
+                "foundry_plan": foundry_out.get("foundry_plan"),
+                "foundry_trace_tags": foundry_out.get("foundry_trace_tags"),
+                "foundry_tracing_enabled": foundry_out.get("foundry_tracing_enabled"),
+            }
 
         # Normal chat or file analysis
         try:

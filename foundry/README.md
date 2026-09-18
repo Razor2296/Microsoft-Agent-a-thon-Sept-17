@@ -61,3 +61,27 @@ Do not enable Tool Call Accuracy on portal evals. Keep Coherence / Fluency.
 | API `mode=auto` | optional `FOUNDRY_USE_IGNITE_API` on `inspect_document` |
 
 Synthetic data only in `data/documents.json` + `data/modalities.json` (no real PHI).
+
+## Ignite app → Foundry Traces + workflow
+
+In this contest snapshot, `app/backend/integrations/foundry_orchestration.py` hooks
+`api.py` so a user turn can:
+
+1. Enable GenAI tracing (App Insights / Foundry Tracing).
+2. Prefer `FOUNDRY_WORKFLOW_LIVE` → invoke `ignite-document-workflow`.
+3. Else run `brain.run_turn` (Plan JSON → tools) offline or with `FOUNDRY_BRAIN_LIVE`.
+
+Enable in `app/.env` (and seed agents once):
+
+```env
+FOUNDRY_ORCHESTRATION_ENABLED=true
+AZURE_EXPERIMENTAL_ENABLE_GENAI_TRACING=true
+PROJECT_CONNECTION_STRING=https://....services.ai.azure.com/api/projects/juliancuray-7914
+APPLICATIONINSIGHTS_CONNECTION_STRING=...
+# Optional live portal graph:
+# FOUNDRY_WORKFLOW_LIVE=true
+# FOUNDRY_BRAIN_LIVE=true
+```
+
+Then: `python agents.py` → `python workflow.py` once, start Ignite via `run_app.bat`,
+send `Extrae DOC-001`, and open Foundry → **Tracing**.

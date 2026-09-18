@@ -40,10 +40,10 @@ python workflow.py    # portal workflow graph
 
 ## Demo script (speak this)
 
-1. “Level 3 Architect. Foundry orchestrator emits Plan JSON; specialists extract documents or describe media; Traces tag modality.”  
-2. Show `python brain.py` or portal Agents: EXTRACT DOC-001 + MEDIA MED-IMG-001.  
-3. Foundry **`juliancuray-7914`**: Workflow graph → Tracing (`modality:*`) → Evaluations.  
-4. Mention Ignite Chat/API only as the product this architecture mirrors — **this repo does not change them**.  
+1. “Level 3 Architect. Ignite Chat turns start Foundry GenAI Tracing and a Plan/Workflow brain.”  
+2. Enable `FOUNDRY_ORCHESTRATION_ENABLED=true`, run desktop `run_app.bat`, send `Extrae DOC-001`.  
+3. Show reply + Plan footer; Foundry **`juliancuray-7914`**: Tracing → Agents → Workflow.  
+4. This repo only — IgniteChat / IgniteAPI product remotes are not modified.  
 5. Stop. No Autopilot roadmap.
 
 ## Do not

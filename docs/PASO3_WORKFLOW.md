@@ -57,18 +57,26 @@ Código: [`foundry/agents.py`](../foundry/agents.py), [`foundry/brain.py`](../fo
 
 ## 3. Secuencia de interacciones (requisito 1)
 
-1. **Trigger** — usuario pide extraer/describir/exportar (texto + id DOC-* o MED-*).  
-2. **Orchestrator (Plan)** — produce JSON con `modality`, `intent`, `steps[]`, `trace_tags`.  
-3. **Specialist** — ejecuta solo el paso asignado (`inspect_document` o `describe_media`).  
-4. **Orchestrator (synthesize)** — convierte hechos en mensaje de negocio.  
-5. **End** — reply al usuario; tags disponibles para Traces.
+1. **Trigger** — usuario en Ignite Chat (snapshot) pide extraer/describir/exportar, o adjunta archivo (`FOUNDRY_ORCHESTRATION_ENABLED=true`).  
+2. **Traces** — `foundry_orchestration` activa GenAI tracing → Application Insights / Foundry Tracing.  
+3. **Workflow o Plan** — si `FOUNDRY_WORKFLOW_LIVE`, invoca `ignite-document-workflow`; si no, `brain.run_turn` (Plan JSON).  
+4. **Specialist** — `inspect_document` / `describe_media` según el Plan.  
+5. **Reply** — mensaje de negocio vuelve a la burbuja de Chat; `trace_tags` quedan en el payload.
 
-Demo offline (sin Azure):
+Offline (sin Azure):
 
 ```powershell
 cd foundry
 python brain.py
 python workflow.py   # Part A siempre; Parts B/C si hay .env
+```
+
+Con app:
+
+```powershell
+# app/.env → FOUNDRY_ORCHESTRATION_ENABLED=true
+run_app.bat
+# En el chat: Extrae DOC-001
 ```
 
 ---
