@@ -166,7 +166,7 @@ OnConversationStart
  step_document      (ignite-document-agent)      → inspect_document
         │
         ▼
- step_media         (ignite-media-agent)         → describe_media (no-op si no hay MED-*)
+ step_media         (ignite-image-agent)         → describe_media (no-op si no hay MED-*)
         │
         ▼
  step_synthesize    (ignite-orchestrator-agent)  → reply usuario
