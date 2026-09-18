@@ -40,11 +40,11 @@ python workflow.py    # portal workflow graph
 
 ## Demo script (speak this)
 
-1. “Level 3 Architect. Ignite Chat turns start Foundry GenAI Tracing and a Plan/Workflow brain.”  
-2. Enable `FOUNDRY_ORCHESTRATION_ENABLED=true`, run desktop `run_app.bat`, send `Extrae DOC-001`.  
-3. Show reply + Plan footer; Foundry **`juliancuray-7914`**: Tracing → Agents → Workflow.  
-4. This repo only — IgniteChat / IgniteAPI product remotes are not modified.  
-5. Stop. No Autopilot roadmap.
+1. “Ignite Chat turn arms Foundry GenAI Tracing, auto-creates agents/workflow, and orchestrates under those traces.”  
+2. `FOUNDRY_ORCHESTRATION_ENABLED=true` + project endpoint → `run_app.bat` → `Extrae DOC-001`.  
+3. Show chat bubble (Plan footer) + Foundry Tracing / Agents / Workflow — no manual `agents.py`.  
+4. Optional: same path after Chat → Ignite API extract.  
+5. Stop. No Autopilot. No PHI.
 
 ## Do not
 
