@@ -25,7 +25,7 @@ Rules: https://aka.ms/AgentathonRules
 
 ## Foundry brain (Architect checkboxes)
 
-On project **`juliancuray-7914`** — deployment **`gpt-5-mini`**:
+On project **`juliancuray-7914`** — deployment **`gemini-2.5-flash`** (Gemini first):
 
 ```powershell
 cd foundry

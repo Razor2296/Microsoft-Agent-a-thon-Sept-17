@@ -3,7 +3,7 @@
 **Solución:** Ignite multi-agent on Microsoft Foundry  
 **Repo de entrega:** [Razor2296/Microsoft-Agent-a-thon-Sept-17](https://github.com/Razor2296/Microsoft-Agent-a-thon-Sept-17)  
 **Producto de referencia (no modificado en esta entrega):** Ignite Chat + Ignite API  
-**Foundry project:** `juliancuray-7914` · modelo `gpt-5-mini`  
+**Foundry project:** `juliancuray-7914` · modelo `gemini-2.5-flash` (Gemini primero)  
 **Fecha objetivo:** 24 September 2026, 23:59 PDT  
 
 Este documento cumple la rúbrica Founderz *Paso 3: Diseña el flujo de trabajo de principio a fin*.  
@@ -58,11 +58,11 @@ Código: [`foundry/agents.py`](../foundry/agents.py), [`foundry/brain.py`](../fo
 ## 3. Secuencia de interacciones (requisito 1)
 
 1. **Trigger** — usuario en Ignite Chat (o Chat → Ignite API extract) con PDF / DOC-* / MED-* / “extrae…”.  
-2. **Traces ON** — `runtime.setup_tracing()` (GenAI → Foundry Tracing / App Insights).  
-3. **Auto-ensure** — `runtime.ensure_agents_and_workflow()` crea lo mismo que `agents.py` + `workflow.py` si falta.  
-4. **Orchestrate** — `runtime.invoke_workflow()` bajo esos Traces (plan → document → media → synthesize).  
+2. **Traces ON** — `runtime.setup_tracing()` (GenAI → Foundry Tracing / App Insights) **antes** de cualquier agente.  
+3. **Auto-ensure** — `runtime.ensure_agents_and_workflow()` publica agentes + workflow con **Gemini** (`MODEL_DEPLOYMENT_NAME=gemini-2.5-flash`).  
+4. **Orchestrate** — `runtime.invoke_workflow()` bajo esos Traces (plan → document → media → synthesize). Si el workflow vuelve vacío, pipeline por agente como fallback.  
 5. **Plan mirror** — `brain.run_turn` aporta Plan JSON + reply estructurado a la burbuja.  
-6. **End** — usuario ve resultado; judges ven Tracing + Agents + Workflow.
+6. **End** — usuario ve resultado; judges ven Tracing + Agents + Workflow. Si no llega a Foundry, la burbuja muestra `⚠ NO LLEGÓ A FOUNDRY`.
 
 No hace falta ejecutar `agents.py` / `workflow.py` a mano para la demo.
 
@@ -72,9 +72,12 @@ FOUNDRY_ORCHESTRATION_ENABLED=true
 PROJECT_CONNECTION_STRING=...
 APPLICATIONINSIGHTS_CONNECTION_STRING=...
 AZURE_EXPERIMENTAL_ENABLE_GENAI_TRACING=true
+MODEL_DEPLOYMENT_NAME=gemini-2.5-flash
+FOUNDRY_REFRESH_AGENTS=true
 
 run_app.bat
-# Chat: Extrae DOC-001  →  Foundry → Tracing
+# Chat: Extrae DOC-001  →  Foundry → ignite-document-workflow Traces
+# (NO abras ignite-image-agent — el media agent es ignite-media-agent)
 ```
 
 ---
@@ -122,7 +125,7 @@ Ejemplos que produce `brain.run_turn`:
 
 ### Despliegue
 
-1. Foundry project `juliancuray-7914` + deployment `gpt-5-mini`.  
+1. Foundry project `juliancuray-7914` + deployment `gemini-2.5-flash` (Gemini).  
 2. `foundry/.env` ← Project endpoint + App Insights.  
 3. `python agents.py` → crea/actualiza agentes.  
 4. `python workflow.py` → publica grafo `ignite-document-workflow`.  

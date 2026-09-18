@@ -1,4 +1,4 @@
-"""Unit tests: Chat → Traces → auto ensure + orchestrate (offline)."""
+"""Unit tests: Chat → Traces → workflow (Gemini) / offline loud failure."""
 from __future__ import annotations
 
 import importlib.util
@@ -28,25 +28,31 @@ class TestFoundryOrchestrationGodPath(unittest.TestCase):
     def setUpClass(cls):
         os.environ["FOUNDRY_USE_IGNITE_API"] = "false"
         os.environ.pop("PROJECT_CONNECTION_STRING", None)
+        os.environ.pop("APPLICATIONINSIGHTS_CONNECTION_STRING", None)
         os.environ["FOUNDRY_BRAIN_LIVE"] = "false"
         os.environ["FOUNDRY_WORKFLOW_LIVE"] = "false"
+        os.environ["MODEL_DEPLOYMENT_NAME"] = "gemini-2.5-flash"
         cls.orch = _load("foundry_orch_god", MOD_PATH)
         cls.runtime = _load("foundry_runtime_god", RUNTIME_PATH)
 
     def setUp(self):
         os.environ["FOUNDRY_ORCHESTRATION_ENABLED"] = "true"
+        os.environ.pop("PROJECT_CONNECTION_STRING", None)
         self.runtime._READY = False
         self.runtime._TRACING_READY = False
 
-    def test_chat_turn_orchestrates_offline(self):
+    def test_chat_turn_offline_surfaces_error(self):
         out = self.orch.maybe_run_foundry_turn("Extrae DOC-001", language="es")
         self.assertIsNotNone(out)
-        self.assertEqual(out["status"], "success")
+        self.assertEqual(out["status"], "error")
+        self.assertIn("NO LLEGÓ A FOUNDRY", out["message"])
         self.assertIn("DOC-001", out["message"])
         self.assertEqual(out["foundry_plan"]["intent"], "EXTRACT")
+        self.assertFalse(out["foundry_live"])
+        self.assertEqual(out["foundry_model"], "gemini-2.5-flash")
         self.assertIn("trigger:chat", " ".join(out["foundry_trace_tags"]))
 
-    def test_post_extract_hook(self):
+    def test_post_extract_hook_offline_loud(self):
         out = self.orch.notify_foundry_after_extract(
             filename="receta.pdf",
             template_name="Medical_Prescription",
@@ -56,6 +62,8 @@ class TestFoundryOrchestrationGodPath(unittest.TestCase):
         self.assertIsNotNone(out)
         self.assertTrue(out["foundry"])
         self.assertEqual(out.get("foundry_trigger"), "chat_api_extract")
+        self.assertEqual(out["status"], "error")
+        self.assertIn("NO LLEGÓ A FOUNDRY", out["message"])
 
     def test_disabled_skips_both_hooks(self):
         os.environ["FOUNDRY_ORCHESTRATION_ENABLED"] = "false"
@@ -71,11 +79,62 @@ class TestFoundryOrchestrationGodPath(unittest.TestCase):
             "Describe MED-AUD-001", lang="es", trigger="chat"
         )
         self.assertEqual(result["plan"]["modality"], "audio")
-        self.assertFalse(result["tracing_enabled"])  # no PROJECT_CONNECTION_STRING
+        self.assertFalse(result["tracing_enabled"])
+        self.assertFalse(result["live"])
+        self.assertEqual(result["model"], "gemini-2.5-flash")
+        self.assertIn("NO LLEGÓ A FOUNDRY", result["error"])
         self.assertIn("trigger:chat", result["trace_tags"])
 
     def test_ensure_without_project_is_false(self):
         self.assertFalse(self.runtime.ensure_agents_and_workflow())
+
+    def test_default_model_is_gemini(self):
+        self.assertEqual(self.runtime.MODEL(), "gemini-2.5-flash")
+
+    def test_workflow_preferred_over_pipeline(self):
+        """When project is set, workflow runs first under Traces."""
+        calls = {"workflow": 0, "pipeline": 0}
+
+        def fake_workflow(_text):
+            calls["workflow"] += 1
+            return {
+                "source": "foundry_workflow",
+                "workflow": "ignite-document-workflow",
+                "status": "completed",
+                "message": "workflow-ok",
+                "trace_tags": ["source:foundry_workflow"],
+            }
+
+        def fake_pipeline(_text):
+            calls["pipeline"] += 1
+            return {
+                "source": "foundry_agent_pipeline",
+                "message": "pipeline-ok",
+                "plan": {"intent": "EXTRACT"},
+                "trace_tags": [],
+            }
+
+        with patch.dict(
+            os.environ,
+            {
+                "PROJECT_CONNECTION_STRING": "https://example.services.ai.azure.com/api/projects/x",
+                "APPLICATIONINSIGHTS_CONNECTION_STRING": "InstrumentationKey=test",
+            },
+        ), patch.object(self.runtime, "setup_tracing", return_value=True), patch.object(
+            self.runtime, "ensure_agents_and_workflow", return_value=True
+        ), patch.object(self.runtime, "invoke_workflow", side_effect=fake_workflow), patch.object(
+            self.runtime, "invoke_agent_pipeline", side_effect=fake_pipeline
+        ):
+            result = self.runtime.run_traced_orchestration(
+                "Extrae DOC-001", lang="es", trigger="chat"
+            )
+
+        self.assertEqual(calls["workflow"], 1)
+        self.assertEqual(calls["pipeline"], 0)  # skipped when workflow has text
+        self.assertEqual(result["source"], "foundry_workflow")
+        self.assertTrue(result["live"])
+        self.assertEqual(result["message"], "workflow-ok")
+        self.assertIn("path:workflow", result["trace_tags"])
 
 
 if __name__ == "__main__":

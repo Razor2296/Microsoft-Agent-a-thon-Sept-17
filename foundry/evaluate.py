@@ -20,7 +20,11 @@ FOUNDRY_DIR = Path(__file__).resolve().parent
 load_dotenv(FOUNDRY_DIR / ".env")
 
 PROJECT_CONNECTION_STRING = (os.getenv("PROJECT_CONNECTION_STRING") or "").strip()
-MODEL_DEPLOYMENT_NAME = os.getenv("MODEL_DEPLOYMENT_NAME", "gpt-5-mini").strip()
+MODEL_DEPLOYMENT_NAME = (
+    os.getenv("MODEL_DEPLOYMENT_NAME")
+    or os.getenv("FOUNDRY_MODEL_DEPLOYMENT_NAME")
+    or "gemini-2.5-flash"
+).strip()
 DOCUMENT_AGENT = os.getenv("IGNITE_DOCUMENT_AGENT", "ignite-document-agent").strip()
 EVAL_JSONL = FOUNDRY_DIR / "eval" / "eval_portal.jsonl"
 

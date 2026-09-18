@@ -1,10 +1,11 @@
-"""Ignite Chat → Foundry Traces → auto agents/workflow orchestration.
+"""Ignite Chat → Foundry Traces → workflow orchestration (Gemini).
 
 When FOUNDRY_ORCHESTRATION_ENABLED=true:
   1. Arm GenAI Tracing (Foundry / App Insights)
-  2. Ensure agents + workflow exist in the project (same as agents.py / workflow.py)
-  3. Invoke the workflow under those traces (orchestration visible in portal)
-  4. Mirror a Plan JSON locally for the chat bubble / offline fallback
+  2. Ensure agents + workflow exist (MODEL_DEPLOYMENT_NAME, default gemini-2.5-flash)
+  3. Invoke the Foundry WORKFLOW under those traces (primary path)
+  4. Fallback per-agent pipeline if workflow returns empty
+  5. Mirror Plan JSON locally for the chat bubble / offline fallback
 
 Hooks:
   - Chat turns (document/media/extract) via maybe_run_foundry_turn
@@ -101,19 +102,33 @@ def _format_chat_message(raw: dict[str, Any]) -> str:
     message = (raw.get("message") or "").strip()
     plan = raw.get("plan") or {}
     tags = raw.get("trace_tags") or []
-    parts = [message] if message else []
+    parts: list[str] = []
+    err = (raw.get("error") or "").strip()
+    if err:
+        parts.append(f"⚠ {err}")
+    if message:
+        parts.append(message)
     if plan:
         steps = ", ".join(
             f"{s.get('action')}@{s.get('agent')}" for s in (plan.get("steps") or [])
         )
         parts.append(
             "\n— Foundry orchestration"
+            f"\n  model={raw.get('model') or 'gemini'}"
             f"\n  intent={plan.get('intent')} modality={plan.get('modality')}"
             f"\n  steps=[{steps}]"
             f"\n  tags={', '.join(tags)}"
             f"\n  tracing={'on' if raw.get('tracing_enabled') else 'off'}"
+            f"  appinsights={'on' if raw.get('app_insights_enabled') else 'off'}"
             f"  agents={'ready' if raw.get('agents_ensured') else 'offline'}"
+            f"  live={'yes' if raw.get('live') else 'no'}"
+            f"  workflow={raw.get('workflow') or '-'}"
             f"  trigger={raw.get('trigger')}"
+        )
+    elif err and not message:
+        parts.append(
+            "\n— Foundry orchestration failed before Plan JSON. "
+            "Fix .env / az login, then retry Extrae DOC-001."
         )
     return "\n".join(parts).strip()
 
@@ -125,7 +140,7 @@ def run_foundry_turn(
     language: str | None = None,
     trigger: str = "chat",
 ) -> dict[str, Any]:
-    """Traces → ensure agents/workflow → orchestrate (Chat path)."""
+    """Traces → ensure agents/workflow (Gemini) → invoke workflow (Chat path)."""
     _load_foundry_env()
     _ensure_foundry_on_path()
     from runtime import run_traced_orchestration  # type: ignore
@@ -152,11 +167,13 @@ def maybe_run_foundry_turn(
         logger.exception("foundry_orchestration: chat turn failed")
         return {
             "status": "error",
-            "message": f"Foundry orchestration failed: {exc}",
+            "message": f"⚠ Foundry orchestration failed: {exc}",
             "foundry": True,
         }
+    live = bool(raw.get("live"))
+    hard_fail = bool(raw.get("error")) and not live
     return {
-        "status": "success",
+        "status": "error" if hard_fail else "success",
         "message": _format_chat_message(raw),
         "foundry": True,
         "foundry_source": raw.get("source"),
@@ -165,6 +182,10 @@ def maybe_run_foundry_turn(
         "foundry_tracing_enabled": raw.get("tracing_enabled"),
         "foundry_agents_ensured": raw.get("agents_ensured"),
         "foundry_workflow": raw.get("workflow"),
+        "foundry_live": live,
+        "foundry_model": raw.get("model"),
+        "foundry_error": raw.get("error"),
+        "foundry_app_insights": raw.get("app_insights_enabled"),
     }
 
 
@@ -176,7 +197,7 @@ def notify_foundry_after_extract(
     language: str | None = None,
     user_text: str | None = None,
 ) -> dict[str, Any] | None:
-    """Chat → Ignite API extract hook: same Traces + workflow orchestration."""
+    """Chat → Ignite API extract hook: Traces ON → workflow (Gemini)."""
     if not foundry_orchestration_enabled():
         return None
     summary = {
@@ -194,9 +215,16 @@ def notify_foundry_after_extract(
         raw = run_foundry_turn(prompt, language=language, trigger="chat_api_extract")
     except Exception as exc:
         logger.warning("foundry_orchestration: post-extract orchestration failed (%s)", exc)
-        return None
+        return {
+            "status": "error",
+            "message": f"⚠ Foundry post-extract failed: {exc}",
+            "foundry": True,
+            "foundry_trigger": "chat_api_extract",
+        }
+    live = bool(raw.get("live"))
+    hard_fail = bool(raw.get("error")) and not live
     return {
-        "status": "success",
+        "status": "error" if hard_fail else "success",
         "message": _format_chat_message(raw),
         "foundry": True,
         "foundry_source": raw.get("source"),
@@ -204,4 +232,8 @@ def notify_foundry_after_extract(
         "foundry_trace_tags": raw.get("trace_tags"),
         "foundry_tracing_enabled": raw.get("tracing_enabled"),
         "foundry_trigger": "chat_api_extract",
+        "foundry_live": live,
+        "foundry_model": raw.get("model"),
+        "foundry_error": raw.get("error"),
+        "foundry_workflow": raw.get("workflow"),
     }

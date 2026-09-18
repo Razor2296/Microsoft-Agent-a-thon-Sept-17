@@ -22,15 +22,28 @@ DOCUMENT_AGENT = lambda: (os.getenv("IGNITE_DOCUMENT_AGENT") or "ignite-document
 MEDIA_AGENT = lambda: (os.getenv("IGNITE_MEDIA_AGENT") or "ignite-media-agent").strip()
 ORCHESTRATOR_AGENT = lambda: (os.getenv("IGNITE_ORCHESTRATOR_AGENT") or "ignite-orchestrator-agent").strip()
 WORKFLOW_AGENT = lambda: (os.getenv("IGNITE_WORKFLOW_AGENT") or "ignite-document-workflow").strip()
-MODEL = lambda: (os.getenv("MODEL_DEPLOYMENT_NAME") or "gpt-5-mini").strip()
+# Foundry deployment name (Models + endpoints). Gemini first for Paso 3.
+MODEL = lambda: (
+    os.getenv("MODEL_DEPLOYMENT_NAME")
+    or os.getenv("FOUNDRY_MODEL_DEPLOYMENT_NAME")
+    or "gemini-2.5-flash"
+).strip()
 
 
 def _project() -> str:
     return (os.getenv("PROJECT_CONNECTION_STRING") or "").strip()
 
 
+def _app_insights() -> str:
+    return (os.getenv("APPLICATIONINSIGHTS_CONNECTION_STRING") or "").strip()
+
+
 def setup_tracing() -> bool:
-    """Idempotent GenAI → Foundry Tracing / App Insights."""
+    """Idempotent GenAI → Foundry Tracing / App Insights.
+
+    Foundry Traces UI needs the project endpoint + (ideally) Application Insights.
+    Without App Insights, agent calls may still create portal traces, but Monitor/Insights stay empty.
+    """
     global _TRACING_READY
     if _TRACING_READY:
         return True
@@ -45,11 +58,17 @@ def setup_tracing() -> bool:
         return False
     try:
         AIProjectInstrumentor().instrument()
-        conn = (os.getenv("APPLICATIONINSIGHTS_CONNECTION_STRING") or "").strip()
+        conn = _app_insights()
         if conn:
             configure_azure_monitor(connection_string=conn, enable_live_metrics=True)
+            logger.info("foundry.runtime: GenAI tracing + App Insights armed")
+        else:
+            logger.warning(
+                "foundry.runtime: APPLICATIONINSIGHTS_CONNECTION_STRING missing — "
+                "agent calls still run, but Foundry Traces/Monitor may stay empty. "
+                "Copy it from Foundry → project → Tracing / Application Insights."
+            )
         _TRACING_READY = True
-        logger.info("foundry.runtime: GenAI tracing armed")
         return True
     except Exception as exc:
         logger.warning("foundry.runtime: tracing setup failed (%s)", exc)
@@ -181,12 +200,23 @@ def _create_workflow(client) -> str:
 
 
 def ensure_agents_and_workflow(*, force: bool = False) -> bool:
-    """Create agents + workflow in Foundry if missing. Cached per process."""
+    """Ensure agents + workflow exist in Foundry (Gemini model by default).
+
+    Always publishes a fresh agent/workflow version when missing OR when
+    FOUNDRY_REFRESH_AGENTS=true / force=True so MODEL_DEPLOYMENT_NAME sticks.
+    Cached per process after first success unless force.
+    """
     global _READY
     if _READY and not force:
         return True
     if not _project():
         return False
+    refresh = force or (os.getenv("FOUNDRY_REFRESH_AGENTS") or "").strip().lower() in (
+        "1",
+        "true",
+        "yes",
+        "on",
+    )
     with _LOCK:
         if _READY and not force:
             return True
@@ -195,12 +225,22 @@ def ensure_agents_and_workflow(*, force: bool = False) -> bool:
             try:
                 names = {a.name for a in client.agents.list()}
                 needed = {DOCUMENT_AGENT(), MEDIA_AGENT(), ORCHESTRATOR_AGENT()}
-                if not needed.issubset(names):
-                    logger.info("foundry.runtime: creating agents %s", sorted(needed - names))
+                missing = needed - names
+                if missing or refresh:
+                    logger.info(
+                        "foundry.runtime: publishing agents model=%s missing=%s refresh=%s",
+                        MODEL(),
+                        sorted(missing),
+                        refresh,
+                    )
                     _create_agents(client)
                     names = {a.name for a in client.agents.list()}
-                if WORKFLOW_AGENT() not in names:
-                    logger.info("foundry.runtime: creating workflow %s", WORKFLOW_AGENT())
+                if WORKFLOW_AGENT() not in names or refresh:
+                    logger.info(
+                        "foundry.runtime: publishing workflow %s (model=%s)",
+                        WORKFLOW_AGENT(),
+                        MODEL(),
+                    )
                     _create_workflow(client)
             finally:
                 client.close()
@@ -211,8 +251,141 @@ def ensure_agents_and_workflow(*, force: bool = False) -> bool:
             return False
 
 
+def _respond_agent(openai_client, agent_name: str, text: str) -> str:
+    """One agent call (appears under that agent's Traces tab). Handles local tools."""
+    from openai.types.responses.response_input_param import FunctionCallOutput
+    from media_tools import describe_media
+    from tools import inspect_document
+
+    agent_ref = {"agent_reference": {"name": agent_name, "type": "agent_reference"}}
+    conversation = openai_client.conversations.create()
+    response = openai_client.responses.create(
+        input=text,
+        conversation=conversation.id,
+        extra_body=agent_ref,
+    )
+    while True:
+        calls = [item for item in response.output if getattr(item, "type", None) == "function_call"]
+        if not calls:
+            break
+        outputs = []
+        for item in calls:
+            if item.name == "inspect_document":
+                args = json.loads(item.arguments or "{}")
+                result = inspect_document(args.get("doc_id") or "")
+            elif item.name == "describe_media":
+                args = json.loads(item.arguments or "{}")
+                result = describe_media(args.get("media_id") or "")
+            else:
+                result = json.dumps({"error": f"Unknown tool '{item.name}'"})
+            outputs.append(
+                FunctionCallOutput(
+                    type="function_call_output",
+                    call_id=item.call_id,
+                    output=result,
+                )
+            )
+        response = openai_client.responses.create(
+            input=outputs,
+            conversation=conversation.id,
+            extra_body=agent_ref,
+        )
+    out = (response.output_text or "").strip()
+    openai_client.conversations.delete(conversation_id=conversation.id)
+    return out
+
+
+def invoke_agent_pipeline(user_text: str) -> dict[str, Any] | None:
+    """
+    Live multi-agent orchestration under GenAI tracing.
+    Creates spans on ignite-orchestrator-agent, ignite-document-agent, ignite-media-agent
+    (open those tabs in Foundry → Agents → Traces — NOT ignite-image-agent).
+    """
+    if not _project():
+        return None
+    try:
+        from brain import heuristic_plan  # type: ignore
+
+        plan = heuristic_plan(user_text)
+        client = _client()
+        openai_client = client.get_openai_client()
+        try:
+            plan_prompt = (
+                "Emit ONLY Plan JSON for this user turn (no tools):\n" + user_text
+            )
+            plan_text = _respond_agent(openai_client, ORCHESTRATOR_AGENT(), plan_prompt)
+
+            specialist_out = ""
+            intent = (plan.get("intent") or "").upper()
+            if intent in ("EXTRACT", "ANSWER") or plan.get("doc_id"):
+                doc_id = plan.get("doc_id") or "DOC-001"
+                specialist_out = _respond_agent(
+                    openai_client,
+                    DOCUMENT_AGENT(),
+                    f"Extract/inspect {doc_id}. User said: {user_text}",
+                )
+            elif intent == "MEDIA_DESCRIBE" or plan.get("media_id"):
+                media_id = plan.get("media_id") or "MED-IMG-001"
+                specialist_out = _respond_agent(
+                    openai_client,
+                    MEDIA_AGENT(),
+                    f"Describe {media_id}. User said: {user_text}",
+                )
+
+            synth = _respond_agent(
+                openai_client,
+                ORCHESTRATOR_AGENT(),
+                "Synthesize a short user-facing reply in the user's language.\n"
+                f"USER: {user_text}\nPLAN: {json.dumps(plan, ensure_ascii=False)}\n"
+                f"SPECIALIST: {specialist_out}\nPRIOR_PLAN_TEXT: {plan_text[:1500]}",
+            )
+            message = synth or specialist_out or plan_text
+            if not message:
+                return {
+                    "source": "foundry_agent_pipeline",
+                    "workflow": None,
+                    "message": "",
+                    "plan": plan,
+                    "error": "Live agent calls returned empty text.",
+                    "trace_tags": [
+                        "source:foundry_agent_pipeline",
+                        "live:empty",
+                        f"agent:{DOCUMENT_AGENT()}",
+                        f"agent:{MEDIA_AGENT()}",
+                        f"agent:{ORCHESTRATOR_AGENT()}",
+                    ],
+                }
+            return {
+                "source": "foundry_agent_pipeline",
+                "workflow": None,
+                "message": message,
+                "plan": plan,
+                "trace_tags": [
+                    "source:foundry_agent_pipeline",
+                    f"intent:{plan.get('intent')}",
+                    f"modality:{plan.get('modality')}",
+                    "trace:genai",
+                    f"agent:{DOCUMENT_AGENT()}",
+                    f"agent:{ORCHESTRATOR_AGENT()}",
+                    f"agent:{MEDIA_AGENT()}",
+                ],
+            }
+        finally:
+            client.close()
+    except Exception as exc:
+        logger.warning("foundry.runtime: agent pipeline failed (%s)", exc)
+        return {
+            "source": "foundry_agent_pipeline_error",
+            "workflow": None,
+            "message": "",
+            "plan": None,
+            "error": f"Live agent pipeline failed: {exc}",
+            "trace_tags": ["source:foundry_agent_pipeline_error", "live:false"],
+        }
+
+
 def invoke_workflow(user_text: str, *, timeout_s: float = 90.0) -> dict[str, Any] | None:
-    """Run the Foundry workflow agent (shows up under Tracing)."""
+    """Run the Foundry workflow agent (also appears under Tracing)."""
     if not _project():
         return None
     name = WORKFLOW_AGENT()
@@ -227,12 +400,13 @@ def invoke_workflow(user_text: str, *, timeout_s: float = 90.0) -> dict[str, Any
             background=True,
         )
         output_text = ""
+        status = "running"
         deadline = time.time() + timeout_s
         while time.time() < deadline:
             fetched = openai_client.responses.retrieve(resp.id)
+            status = fetched.status
             if fetched.status in ("completed", "failed", "cancelled"):
                 output_text = (fetched.output_text or "").strip()
-                status = fetched.status
                 break
             time.sleep(2)
         else:
@@ -240,7 +414,13 @@ def invoke_workflow(user_text: str, *, timeout_s: float = 90.0) -> dict[str, Any
         openai_client.conversations.delete(conversation_id=conversation.id)
         client.close()
         if not output_text and status != "completed":
-            return None
+            return {
+                "source": "foundry_workflow",
+                "workflow": name,
+                "status": status,
+                "message": "",
+                "trace_tags": ["source:foundry_workflow", f"workflow:{name}", "trace:genai"],
+            }
         return {
             "source": "foundry_workflow",
             "workflow": name,
@@ -254,7 +434,14 @@ def invoke_workflow(user_text: str, *, timeout_s: float = 90.0) -> dict[str, Any
         }
     except Exception as exc:
         logger.warning("foundry.runtime: workflow invoke failed (%s)", exc)
-        return None
+        return {
+            "source": "foundry_workflow_error",
+            "workflow": name,
+            "status": "error",
+            "message": "",
+            "error": f"Workflow invoke failed: {exc}",
+            "trace_tags": ["source:foundry_workflow_error", f"workflow:{name}", "live:false"],
+        }
 
 
 def run_traced_orchestration(
@@ -264,50 +451,158 @@ def run_traced_orchestration(
     trigger: str = "chat",
 ) -> dict[str, Any]:
     """
-    Full path used by Ignite Chat:
-      1) arm Traces
-      2) ensure agents.py + workflow.py artifacts exist in Foundry
-      3) invoke workflow (orchestration visible in Tracing)
-      4) mirror Plan JSON via local brain for structured footer / offline fallback
+    GOD path — Traces first, then workflow (Gemini agents):
+      1) arm GenAI Traces / App Insights
+      2) ensure agents + workflow exist (model=MODEL_DEPLOYMENT_NAME, default Gemini)
+      3) invoke Foundry WORKFLOW under those traces (primary)
+      4) if workflow empty, fall back to per-agent pipeline (still under Traces)
+      5) offline brain only if PROJECT_CONNECTION_STRING is missing
     """
-    tracing = setup_tracing()
-    ensured = ensure_agents_and_workflow() if tracing or _project() else False
-
-    workflow_payload = None
-    if ensured and _project():
-        tagged = (
-            f"[trigger:{trigger}] {user_text}\n"
-            "Orchestrate: emit Plan JSON, run specialists, reply to the user."
-        )
-        workflow_payload = invoke_workflow(tagged)
-
-    # Always compute a Plan locally (offline-safe) so Chat has structured orchestration
     from brain import run_turn  # type: ignore
 
+    insights = bool(_app_insights())
+    model_name = MODEL()
+
+    if not _project():
+        brain = run_turn(user_text, lang=lang, use_foundry=False)
+        return {
+            "source": "foundry_brain_offline",
+            "workflow": None,
+            "message": brain.get("final_user_message") or "",
+            "plan": brain.get("plan"),
+            "trace_tags": list(brain.get("trace_tags") or [])
+            + [f"trigger:{trigger}", "live:false", f"model:{model_name}"],
+            "tracing_enabled": False,
+            "app_insights_enabled": False,
+            "agents_ensured": False,
+            "live": False,
+            "model": model_name,
+            "tool_results": brain.get("tool_results"),
+            "trigger": trigger,
+            "error": (
+                "NO LLEGÓ A FOUNDRY: falta PROJECT_CONNECTION_STRING en app/.env y foundry/.env. "
+                "Copia el Project endpoint de juliancuray-7914 → Overview. "
+                "Sin eso Chat corre Plan offline y Traces no se actualizan."
+            ),
+        }
+
+    # 1) Traces ON before any agent/workflow call
+    tracing = setup_tracing()
+    # 2) Agents + workflow (Gemini) must exist
+    ensured = ensure_agents_and_workflow()
+    if not ensured:
+        return {
+            "source": "foundry_ensure_failed",
+            "workflow": None,
+            "message": "",
+            "plan": None,
+            "trace_tags": [f"trigger:{trigger}", "live:false", f"model:{model_name}"],
+            "tracing_enabled": tracing,
+            "app_insights_enabled": insights,
+            "agents_ensured": False,
+            "live": False,
+            "model": model_name,
+            "trigger": trigger,
+            "error": (
+                "NO LLEGÓ A FOUNDRY: no se pudieron crear/listar agentes. "
+                "Corre `az login`, verifica PROJECT_CONNECTION_STRING y "
+                f"MODEL_DEPLOYMENT_NAME={model_name} (deploy Gemini in Foundry → Models)."
+            ),
+        }
+
+    tagged = f"[trigger:{trigger}] [model:{model_name}] {user_text}"
+
+    # 3) Primary: Foundry workflow graph under Traces
+    workflow_payload = invoke_workflow(tagged)
+    workflow_msg = (workflow_payload or {}).get("message") or ""
+    workflow_err = (workflow_payload or {}).get("error")
+    if not workflow_err:
+        if workflow_payload is None:
+            workflow_err = "Workflow invoke returned None (auth/endpoint/model?)."
+        elif not workflow_msg:
+            workflow_err = (
+                f"Workflow '{WORKFLOW_AGENT()}' status="
+                f"{(workflow_payload or {}).get('status')} but empty text."
+            )
+
+    # 4) Fallback: per-agent pipeline still under the same Traces session
+    pipeline = None
+    if not workflow_msg:
+        pipeline = invoke_agent_pipeline(tagged)
+
     brain = run_turn(user_text, lang=lang, use_foundry=False)
-    plan = brain.get("plan")
-    message = (workflow_payload or {}).get("message") or brain.get("final_user_message") or ""
-    tags = list((workflow_payload or {}).get("trace_tags") or [])
-    tags.extend(brain.get("trace_tags") or [])
+    pipeline_msg = (pipeline or {}).get("message") or ""
+    plan = (pipeline or {}).get("plan") or brain.get("plan")
+    message = workflow_msg or pipeline_msg or brain.get("final_user_message") or ""
+    tags: list[str] = [f"model:{model_name}", f"provider:gemini"]
+    for src in (workflow_payload, pipeline, brain):
+        if src:
+            tags.extend(src.get("trace_tags") or [])
     tags.append(f"trigger:{trigger}")
     if tracing:
         tags.append("trace:genai")
-    # dedupe preserve order
-    seen = set()
-    uniq_tags = []
+    if insights:
+        tags.append("appinsights:on")
+    else:
+        tags.append("appinsights:off")
+
+    live_ok = bool(workflow_msg or pipeline_msg)
+    tags.append("live:true" if live_ok else "live:false")
+    if workflow_msg:
+        tags.append("path:workflow")
+    elif pipeline_msg:
+        tags.append("path:agent_pipeline_fallback")
+
+    seen: set[str] = set()
+    uniq = []
     for t in tags:
         if t not in seen:
             seen.add(t)
-            uniq_tags.append(t)
+            uniq.append(t)
+
+    err = None
+    if not live_ok:
+        err = (
+            (pipeline or {}).get("error")
+            or workflow_err
+            or (
+                "NO LLEGÓ A FOUNDRY (live vacío): revisa az login + endpoint + "
+                f"MODEL_DEPLOYMENT_NAME={model_name}. "
+                "Abre Traces en ignite-document-workflow / ignite-document-agent / "
+                "ignite-media-agent / ignite-orchestrator-agent "
+                "(NO ignite-image-agent) → Last day → Refresh."
+            )
+        )
+    elif not insights:
+        err = (
+            "Workflow/agents sí corrieron, pero APPLICATIONINSIGHTS_CONNECTION_STRING falta — "
+            "algunas vistas de Traces/Monitor pueden quedar vacías. "
+            "Cópiala desde Foundry → Tracing / Application Insights."
+        )
+    elif workflow_err and pipeline_msg:
+        err = f"Workflow vacío ({workflow_err}) — usé agent pipeline fallback."
+
+    if workflow_msg:
+        source = (workflow_payload or {}).get("source") or "foundry_workflow"
+    elif pipeline_msg:
+        source = (pipeline or {}).get("source") or "foundry_agent_pipeline"
+    elif pipeline and pipeline.get("error"):
+        source = pipeline.get("source") or "foundry_agent_pipeline_error"
+    else:
+        source = "foundry_partial"
 
     return {
-        "source": (workflow_payload or {}).get("source") or "foundry_brain_offline",
-        "workflow": (workflow_payload or {}).get("workflow"),
+        "source": source,
+        "workflow": (workflow_payload or {}).get("workflow") or WORKFLOW_AGENT(),
         "message": message,
         "plan": plan,
-        "trace_tags": uniq_tags,
+        "trace_tags": uniq,
         "tracing_enabled": tracing,
+        "app_insights_enabled": insights,
         "agents_ensured": ensured,
+        "live": live_ok,
+        "model": model_name,
         "tool_results": brain.get("tool_results"),
         "trigger": trigger,
+        "error": err,
     }
