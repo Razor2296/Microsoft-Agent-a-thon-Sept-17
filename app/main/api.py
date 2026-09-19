@@ -139,6 +139,7 @@ from dotenv import load_dotenv
 from backend.integrations.ignite_api_client import IgniteAPIClient
 from backend.integrations.ignite_rag_transformer import extraction_to_rag_chunks
 from backend.integrations.foundry_orchestration import (
+    foundry_orchestration_enabled,
     maybe_run_foundry_turn,
     notify_foundry_after_extract,
 )
@@ -146,6 +147,18 @@ from backend.integrations.foundry_orchestration import (
 
 # Logger 
 logger = get_assistant_logger("pywebview_api")
+
+# Boot banner — if you never see this line, you are NOT running the Agent-a-thon snapshot.
+try:
+    _fo_on = foundry_orchestration_enabled()
+    logger.info(
+        "FOUNDRY BOOT (Agent-a-thon snapshot): orchestration_enabled=%s — "
+        "create-if-missing runs on Chat / Chat→Ignite API extract. "
+        "If this line is missing in your console, you launched product IgniteChat instead.",
+        _fo_on,
+    )
+except Exception as _fo_boot_exc:
+    logger.warning("FOUNDRY BOOT: status check failed (%s)", _fo_boot_exc)
 
 # Maximum number of past messages sent to the model per request (configurable via .env)
 # Lower = fewer tokens per call; higher = more context. 20 pairs ≈ 10 full back-and-forth exchanges.

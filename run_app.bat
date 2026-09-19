@@ -1,6 +1,10 @@
 @echo off
 setlocal EnableExtensions
-title Ignite Gemini Assistant Launcher
+title Ignite Agent-a-thon (Foundry snapshot)
+echo ============================================================
+echo  Agent-a-thon Foundry snapshot — NOT product IgniteChat
+echo  Expect console lines: FOUNDRY BOOT / FOUNDRY create-if-missing
+echo ============================================================
 echo Starting Ignite Gemini Assistant via PyWebView...
 echo Loading libraries, please wait...
 cd /d "%~dp0app"

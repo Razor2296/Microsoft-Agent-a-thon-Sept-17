@@ -23,7 +23,7 @@ Estado: `OPEN` | `DONE` | `DEFERRED` | `BLOCKED`
 | **STD-009** | Persistencia JSON (Cosmos / Postgres / …) | DEFERRED | Mostrar historia en BD JSON-capable — **dejar en paz** hasta pedido explícito |
 | **STD-010** | Modelo Gemini primero | OPEN | `MODEL_DEPLOYMENT_NAME=gemini-2.5-flash` salvo que el usuario pida otro |
 | **STD-011** | Fallo loud si no llega a Foundry | OPEN | Sin `PROJECT_CONNECTION_STRING` → `NO LLEGÓ A FOUNDRY` en burbuja + logs `FOUNDRY ...` |
-| **STD-012** | Ignite API channels → especialista | OPEN | channel document→document-agent; image→image; audio→audio; video→video |
+| **STD-013** | Diagnóstico: ¿repo correcto? | OPEN | Al arrancar Agent-a-thon debe verse `FOUNDRY BOOT` y el banner del `run_app.bat`. Si el log solo tiene Gemini→Ignite API sin `FOUNDRY`, estás en **producto IgniteChat** (no este snapshot) |
 
 ---
 
