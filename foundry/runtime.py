@@ -204,15 +204,14 @@ def _create_workflow(client) -> str:
 
 
 def ensure_agents_and_workflow(*, force: bool = False) -> bool:
-    """Create-if-missing: publish missing canonical agents + workflow (STD-005).
+    """Create-if-missing (STD-005): always re-list; create any missing agents/workflow.
 
-    - Missing name → create_version
-    - Present → leave alone unless force=True or FOUNDRY_REFRESH_AGENTS=true
+    Safe after the user deletes agents in the Foundry portal while Chat is running.
+    `force` / FOUNDRY_REFRESH_AGENTS=true also republishes versions of agents that exist.
     """
     global _READY
-    if _READY and not force:
-        return True
     if not _project():
+        _READY = False
         return False
     from agent_names import all_prompt_agents
 
@@ -223,8 +222,6 @@ def ensure_agents_and_workflow(*, force: bool = False) -> bool:
         "on",
     )
     with _LOCK:
-        if _READY and not force:
-            return True
         try:
             client = _client(preview=True)
             try:
@@ -234,22 +231,20 @@ def ensure_agents_and_workflow(*, force: bool = False) -> bool:
                 need_workflow = WORKFLOW_AGENT() not in names
                 if missing_agents or need_workflow or refresh:
                     logger.info(
-                        "foundry.runtime: create-if-missing model=%s missing_agents=%s "
+                        "FOUNDRY create-if-missing model=%s missing_agents=%s "
                         "need_workflow=%s refresh=%s",
                         MODEL(),
                         missing_agents,
                         need_workflow,
                         refresh,
                     )
-                    # Always publish the full segregated set when anything is missing
-                    # or refresh is on — keeps doc/image/audio/video in sync.
                     if missing_agents or refresh:
                         _create_agents(client)
                     if need_workflow or refresh:
                         _create_workflow(client)
                 else:
                     logger.info(
-                        "foundry.runtime: all canonical agents+workflow already present %s",
+                        "FOUNDRY create-if-missing: all present %s",
                         sorted(needed | {WORKFLOW_AGENT()}),
                     )
             finally:
@@ -257,6 +252,7 @@ def ensure_agents_and_workflow(*, force: bool = False) -> bool:
             _READY = True
             return True
         except Exception as exc:
+            _READY = False
             logger.warning("foundry.runtime: ensure agents/workflow failed (%s)", exc)
             return False
 

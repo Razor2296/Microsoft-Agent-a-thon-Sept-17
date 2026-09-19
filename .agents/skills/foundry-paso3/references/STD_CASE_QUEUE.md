@@ -16,7 +16,7 @@ Estado: `OPEN` | `DONE` | `DEFERRED` | `BLOCKED`
 | **STD-002** | NO TOCAR IgniteChat | OPEN | Cero commits/PRs/edits al remote `IgniteChat` |
 | **STD-003** | NO TOCAR IgniteAPI | OPEN | Cero commits/PRs/edits al remote `IgniteAPI` (solo contrato de channels) |
 | **STD-004** | Agentes segregados por modalidad | OPEN | Un agente por tipo: document / image / audio / video + orchestrator |
-| **STD-005** | Create-if-missing | OPEN | Si el agente/workflow **no existe** en Foundry → **créalo**; si ya existe → no reinventar nombres |
+| **STD-005** | Create-if-missing | OPEN | Si el agente/workflow **no existe** en Foundry → **créalo** en cada turno Chat o Chat→Ignite API extract (`ensure` siempre re-lista; no cachea “ya listo” si el usuario borró agentes en el portal) |
 | **STD-006** | Nombres canónicos = portal | OPEN | Exactamente los de Build → Agents en `juliancuray-7914` (ver tabla abajo) |
 | **STD-007** | Traces activan flujo multiagente | OPEN | Chat turn / post-extract → `setup_tracing` → ensure → **`invoke_workflow`** (misma sesión = historia) |
 | **STD-008** | Historia en la misma sesión de chat | OPEN | Plan + especialistas + synthesize visibles en Traces + footer burbuja |
