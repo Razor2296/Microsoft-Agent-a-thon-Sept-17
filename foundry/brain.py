@@ -17,14 +17,27 @@ from dotenv import load_dotenv
 from media_tools import describe_media, load_media
 from plan_schema import PLAN_JSON_SCHEMA_HINT, empty_plan, parse_plan, validate_plan
 from tools import inspect_document, load_documents
+from agent_names import (
+    audio_agent,
+    document_agent,
+    image_agent,
+    orchestrator_agent,
+    specialist_for_media_id,
+    specialist_for_modality,
+    video_agent,
+)
 
 FOUNDRY_DIR = Path(__file__).resolve().parent
 load_dotenv(FOUNDRY_DIR / ".env")
 
 PROJECT_CONNECTION_STRING = (os.getenv("PROJECT_CONNECTION_STRING") or "").strip()
-ORCHESTRATOR_AGENT = os.getenv("IGNITE_ORCHESTRATOR_AGENT", "ignite-orchestrator-agent").strip()
-DOCUMENT_AGENT = os.getenv("IGNITE_DOCUMENT_AGENT", "ignite-document-agent").strip()
-MEDIA_AGENT = os.getenv("IGNITE_MEDIA_AGENT", "ignite-image-agent").strip()
+ORCHESTRATOR_AGENT = orchestrator_agent()
+DOCUMENT_AGENT = document_agent()
+IMAGE_AGENT = image_agent()
+AUDIO_AGENT = audio_agent()
+VIDEO_AGENT = video_agent()
+# Legacy name kept for older callers — always the image specialist, never a 5th agent.
+MEDIA_AGENT = IMAGE_AGENT
 
 _DOC_ID_RE = re.compile(r"\bDOC-\d{3}\b", re.IGNORECASE)
 _MEDIA_ID_RE = re.compile(r"\bMED-(?:IMG|AUD|VID)-\d{3}\b", re.IGNORECASE)
@@ -81,7 +94,9 @@ def heuristic_plan(user_text: str) -> dict[str, Any]:
                 steps=[
                     {
                         "action": "describe_media",
-                        "agent": MEDIA_AGENT,
+                        "agent": specialist_for_modality(modality)
+                        if modality in ("image", "audio", "video")
+                        else specialist_for_media_id(media_id),
                         "args": {"media_id": media_id},
                     },
                     {"action": "synthesize", "agent": ORCHESTRATOR_AGENT, "args": {}},

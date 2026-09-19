@@ -25,8 +25,10 @@ Ignite ya resuelve eso en producto (Chat orquesta, API extrae). En Foundry model
 | --- | --- | --- | --- | --- |
 | **ignite-orchestrator-agent** | **Cerebro** — emite Plan JSON (modalidad + intent + pasos) | ninguna (solo planifica) | turno de usuario | Plan JSON + reply final |
 | **ignite-document-agent** | Especialista documentos | `inspect_document` | `doc_id` (DOC-001…) | campos estructurados |
-| **ignite-image-agent** | Especialista imagen/audio/video | `describe_media` | `media_id` (MED-…) | caption + tags |
-| **ignite-document-workflow** | Grafo Foundry (kind: workflow) | orquesta los tres | conversación | reply de negocio |
+| **ignite-image-agent** | Especialista imagen (Ignite API channel=image) | `describe_media` | `MED-IMG-*` | caption + tags |
+| **ignite-audio-agent** | Especialista audio (channel=audio) | `describe_media` | `MED-AUD-*` | caption + tags |
+| **ignite-video-agent** | Especialista video (channel=video) | `describe_media` | `MED-VID-*` | caption + tags |
+| **ignite-document-workflow** | Grafo Foundry (kind: workflow) | orquesta los cinco | conversación | reply de negocio |
 
 ```text
 Usuario

@@ -18,19 +18,14 @@ _LOCK = threading.Lock()
 _READY = False
 _TRACING_READY = False
 
-DOCUMENT_AGENT = lambda: (os.getenv("IGNITE_DOCUMENT_AGENT") or "ignite-document-agent").strip()
-# Portal tab users open is often "ignite-image-agent" — default there (alias: ignite-media-agent).
-MEDIA_AGENT = lambda: (os.getenv("IGNITE_MEDIA_AGENT") or "ignite-image-agent").strip()
-MEDIA_AGENT_ALIASES = lambda: [
-    a
-    for a in {
-        MEDIA_AGENT(),
-        (os.getenv("IGNITE_MEDIA_AGENT_ALIAS") or "ignite-media-agent").strip(),
-    }
-    if a
-]
-ORCHESTRATOR_AGENT = lambda: (os.getenv("IGNITE_ORCHESTRATOR_AGENT") or "ignite-orchestrator-agent").strip()
-WORKFLOW_AGENT = lambda: (os.getenv("IGNITE_WORKFLOW_AGENT") or "ignite-document-workflow").strip()
+DOCUMENT_AGENT = lambda: __import__("agent_names", fromlist=["document_agent"]).document_agent()
+IMAGE_AGENT = lambda: __import__("agent_names", fromlist=["image_agent"]).image_agent()
+AUDIO_AGENT = lambda: __import__("agent_names", fromlist=["audio_agent"]).audio_agent()
+VIDEO_AGENT = lambda: __import__("agent_names", fromlist=["video_agent"]).video_agent()
+ORCHESTRATOR_AGENT = lambda: __import__("agent_names", fromlist=["orchestrator_agent"]).orchestrator_agent()
+WORKFLOW_AGENT = lambda: __import__("agent_names", fromlist=["workflow_agent"]).workflow_agent()
+# Legacy alias — resolves to image specialist only (do NOT treat as a real agent name).
+MEDIA_AGENT = IMAGE_AGENT
 # Foundry deployment name (Models + endpoints). Gemini first for Paso 3.
 MODEL = lambda: (
     os.getenv("MODEL_DEPLOYMENT_NAME")
@@ -98,6 +93,8 @@ def _client(*, preview: bool = False):
 
 
 def _create_agents(client) -> None:
+    """Publish the five canonical prompt agents (orch + doc/image/audio/video)."""
+    from agent_names import all_prompt_agents, audio_agent, document_agent, image_agent, video_agent
     from plan_schema import PLAN_JSON_SCHEMA_HINT
     from media_tools import DESCRIBE_MEDIA_TOOL
     from tools import INSPECT_DOCUMENT_TOOL
@@ -116,28 +113,33 @@ def _create_agents(client) -> None:
         strict=False,
     )
     client.agents.create_version(
-        agent_name=DOCUMENT_AGENT(),
+        agent_name=document_agent(),
         definition=PromptAgentDefinition(
             model=MODEL(),
             instructions=(
-                "You are Ignite Document Agent. Call inspect_document for DOC-* ids. "
-                "Return structured facts only. Never invent PHI."
+                "You are Ignite Document Agent. Call inspect_document for DOC-* ids / "
+                "Ignite API document channel. Return structured facts only. Never invent PHI."
             ),
             tools=[inspect_tool],
         ),
     )
-    media_def = PromptAgentDefinition(
-        model=MODEL(),
-        instructions=(
-            "You are Ignite Media/Image Agent. Call describe_media for MED-* ids. "
-            "Summarize caption/fields only."
-        ),
-        tools=[media_tool],
-    )
-    for media_name in MEDIA_AGENT_ALIASES():
+    for name, modality, prefix in (
+        (image_agent(), "image", "MED-IMG-*"),
+        (audio_agent(), "audio", "MED-AUD-*"),
+        (video_agent(), "video", "MED-VID-*"),
+    ):
         client.agents.create_version(
-            agent_name=media_name,
-            definition=media_def,
+            agent_name=name,
+            definition=PromptAgentDefinition(
+                model=MODEL(),
+                instructions=(
+                    f"You are Ignite {modality.title()} Agent. "
+                    f"Call describe_media only for {prefix} / Ignite API channel={modality}. "
+                    "Summarize caption/fields only. Never invent PHI. "
+                    "If the id is another modality, say so and stop."
+                ),
+                tools=[media_tool],
+            ),
         )
     client.agents.create_version(
         agent_name=ORCHESTRATOR_AGENT(),
@@ -145,83 +147,75 @@ def _create_agents(client) -> None:
             model=MODEL(),
             instructions=(
                 "You are Ignite Orchestrator — the BRAIN. Emit Plan JSON only on first turn.\n"
+                "Route steps to ignite-document-agent | ignite-image-agent | "
+                "ignite-audio-agent | ignite-video-agent (never invent other agent names).\n"
                 + PLAN_JSON_SCHEMA_HINT
             ),
         ),
     )
+    logger.info("foundry.runtime: ensured prompt agents %s", all_prompt_agents())
 
 
 def _create_workflow(client) -> str:
+    """Workflow graph: plan → four specialists → synthesize (same chat session story)."""
     from azure.ai.projects.models import WorkflowAgentDefinition
 
     name = WORKFLOW_AGENT()
+    steps = [
+        ("step_plan", ORCHESTRATOR_AGENT()),
+        ("step_document", DOCUMENT_AGENT()),
+        ("step_image", IMAGE_AGENT()),
+        ("step_audio", AUDIO_AGENT()),
+        ("step_video", VIDEO_AGENT()),
+        ("step_synthesize", ORCHESTRATOR_AGENT()),
+    ]
+    actions = ""
+    for step_id, agent_name in steps:
+        actions += (
+            "  - kind: InvokeAzureAgent\n"
+            f"    id: {step_id}\n"
+            "    agent:\n"
+            f"      name: {agent_name}\n"
+            "    conversationId: =System.ConversationId\n"
+            "    input:\n"
+            '      messages: ""\n'
+            "    output:\n"
+            "      autoSend: true\n"
+        )
     yaml_text = (
         "kind: Workflow\n"
         f"name: {name}\n"
-        "description: Ignite — Traces-triggered orchestration (plan → document → media → synthesize)\n"
+        "description: Ignite — Traces activate multi-agent story "
+        "(plan → document/image/audio/video → synthesize) in one conversation\n"
         "trigger:\n"
         "  kind: OnConversationStart\n"
         "  id: trigger_start\n"
         "actions:\n"
-        "  - kind: InvokeAzureAgent\n"
-        "    id: step_plan\n"
-        "    agent:\n"
-        f"      name: {ORCHESTRATOR_AGENT()}\n"
-        "    conversationId: =System.ConversationId\n"
-        "    input:\n"
-        '      messages: ""\n'
-        "    output:\n"
-        "      autoSend: true\n"
-        "  - kind: InvokeAzureAgent\n"
-        "    id: step_document\n"
-        "    agent:\n"
-        f"      name: {DOCUMENT_AGENT()}\n"
-        "    conversationId: =System.ConversationId\n"
-        "    input:\n"
-        '      messages: ""\n'
-        "    output:\n"
-        "      autoSend: true\n"
-        "  - kind: InvokeAzureAgent\n"
-        "    id: step_media\n"
-        "    agent:\n"
-        f"      name: {MEDIA_AGENT()}\n"
-        "    conversationId: =System.ConversationId\n"
-        "    input:\n"
-        '      messages: ""\n'
-        "    output:\n"
-        "      autoSend: true\n"
-        "  - kind: InvokeAzureAgent\n"
-        "    id: step_synthesize\n"
-        "    agent:\n"
-        f"      name: {ORCHESTRATOR_AGENT()}\n"
-        "    conversationId: =System.ConversationId\n"
-        "    input:\n"
-        '      messages: ""\n'
-        "    output:\n"
-        "      autoSend: true\n"
+        f"{actions}"
         "  - kind: EndConversation\n"
         "    id: step_end\n"
     )
     client.agents.create_version(
         agent_name=name,
         definition=WorkflowAgentDefinition(workflow=yaml_text),
-        description="Ignite multi-agent workflow — auto-ensured from Chat turns",
+        description="Ignite multi-agent workflow — Traces → same-session story",
     )
     return name
 
 
 def ensure_agents_and_workflow(*, force: bool = False) -> bool:
-    """Ensure agents + workflow exist in Foundry (Gemini model by default).
+    """Create-if-missing: publish missing canonical agents + workflow (STD-005).
 
-    Always publishes a fresh agent/workflow version when missing OR when
-    FOUNDRY_REFRESH_AGENTS=true / force=True so MODEL_DEPLOYMENT_NAME sticks.
-    Cached per process after first success unless force.
+    - Missing name → create_version
+    - Present → leave alone unless force=True or FOUNDRY_REFRESH_AGENTS=true
     """
     global _READY
     if _READY and not force:
         return True
     if not _project():
         return False
+    from agent_names import all_prompt_agents
+
     refresh = force or (os.getenv("FOUNDRY_REFRESH_AGENTS") or "").strip().lower() in (
         "1",
         "true",
@@ -235,24 +229,29 @@ def ensure_agents_and_workflow(*, force: bool = False) -> bool:
             client = _client(preview=True)
             try:
                 names = {a.name for a in client.agents.list()}
-                needed = {DOCUMENT_AGENT(), ORCHESTRATOR_AGENT(), *MEDIA_AGENT_ALIASES()}
-                missing = needed - names
-                if missing or refresh:
+                needed = set(all_prompt_agents())
+                missing_agents = sorted(needed - names)
+                need_workflow = WORKFLOW_AGENT() not in names
+                if missing_agents or need_workflow or refresh:
                     logger.info(
-                        "foundry.runtime: publishing agents model=%s missing=%s refresh=%s",
+                        "foundry.runtime: create-if-missing model=%s missing_agents=%s "
+                        "need_workflow=%s refresh=%s",
                         MODEL(),
-                        sorted(missing),
+                        missing_agents,
+                        need_workflow,
                         refresh,
                     )
-                    _create_agents(client)
-                    names = {a.name for a in client.agents.list()}
-                if WORKFLOW_AGENT() not in names or refresh:
+                    # Always publish the full segregated set when anything is missing
+                    # or refresh is on — keeps doc/image/audio/video in sync.
+                    if missing_agents or refresh:
+                        _create_agents(client)
+                    if need_workflow or refresh:
+                        _create_workflow(client)
+                else:
                     logger.info(
-                        "foundry.runtime: publishing workflow %s (model=%s)",
-                        WORKFLOW_AGENT(),
-                        MODEL(),
+                        "foundry.runtime: all canonical agents+workflow already present %s",
+                        sorted(needed | {WORKFLOW_AGENT()}),
                     )
-                    _create_workflow(client)
             finally:
                 client.close()
             _READY = True
@@ -308,13 +307,13 @@ def _respond_agent(openai_client, agent_name: str, text: str) -> str:
 
 def invoke_agent_pipeline(user_text: str) -> dict[str, Any] | None:
     """
-    Live multi-agent orchestration under GenAI tracing.
-    Creates spans on ignite-orchestrator-agent, ignite-document-agent, ignite-image-agent
-    (open those tabs in Foundry → Agents → Traces).
+    Live multi-agent orchestration under GenAI tracing (fallback if workflow empty).
+    Routes to ignite-document|image|audio|video-agent by modality — never a generic media agent.
     """
     if not _project():
         return None
     try:
+        from agent_names import specialist_for_media_id, specialist_for_modality
         from brain import heuristic_plan  # type: ignore
 
         plan = heuristic_plan(user_text)
@@ -328,27 +327,39 @@ def invoke_agent_pipeline(user_text: str) -> dict[str, Any] | None:
 
             specialist_out = ""
             intent = (plan.get("intent") or "").upper()
-            if intent in ("EXTRACT", "ANSWER") or plan.get("doc_id"):
+            modality = (plan.get("modality") or "").lower()
+            if intent in ("EXTRACT", "ANSWER") or plan.get("doc_id") or modality == "document":
                 doc_id = plan.get("doc_id") or "DOC-001"
+                specialist_name = DOCUMENT_AGENT()
                 specialist_out = _respond_agent(
                     openai_client,
-                    DOCUMENT_AGENT(),
+                    specialist_name,
                     f"Extract/inspect {doc_id}. User said: {user_text}",
                 )
-            elif intent == "MEDIA_DESCRIBE" or plan.get("media_id"):
+            elif intent == "MEDIA_DESCRIBE" or plan.get("media_id") or modality in (
+                "image",
+                "audio",
+                "video",
+            ):
                 media_id = plan.get("media_id") or "MED-IMG-001"
+                specialist_name = specialist_for_media_id(media_id)
+                if modality in ("image", "audio", "video"):
+                    specialist_name = specialist_for_modality(modality)
                 specialist_out = _respond_agent(
                     openai_client,
-                    MEDIA_AGENT(),
-                    f"Describe {media_id}. User said: {user_text}",
+                    specialist_name,
+                    f"Describe {media_id} as {modality or 'media'}. User said: {user_text}",
                 )
+            else:
+                specialist_name = ORCHESTRATOR_AGENT()
 
             synth = _respond_agent(
                 openai_client,
                 ORCHESTRATOR_AGENT(),
                 "Synthesize a short user-facing reply in the user's language.\n"
                 f"USER: {user_text}\nPLAN: {json.dumps(plan, ensure_ascii=False)}\n"
-                f"SPECIALIST: {specialist_out}\nPRIOR_PLAN_TEXT: {plan_text[:1500]}",
+                f"SPECIALIST({specialist_name}): {specialist_out}\n"
+                f"PRIOR_PLAN_TEXT: {plan_text[:1500]}",
             )
             message = synth or specialist_out or plan_text
             if not message:
@@ -361,9 +372,7 @@ def invoke_agent_pipeline(user_text: str) -> dict[str, Any] | None:
                     "trace_tags": [
                         "source:foundry_agent_pipeline",
                         "live:empty",
-                        f"agent:{DOCUMENT_AGENT()}",
-                        f"agent:{MEDIA_AGENT()}",
-                        f"agent:{ORCHESTRATOR_AGENT()}",
+                        f"agent:{specialist_name}",
                     ],
                 }
             return {
@@ -376,9 +385,8 @@ def invoke_agent_pipeline(user_text: str) -> dict[str, Any] | None:
                     f"intent:{plan.get('intent')}",
                     f"modality:{plan.get('modality')}",
                     "trace:genai",
-                    f"agent:{DOCUMENT_AGENT()}",
+                    f"agent:{specialist_name}",
                     f"agent:{ORCHESTRATOR_AGENT()}",
-                    f"agent:{MEDIA_AGENT()}",
                 ],
             }
         finally:

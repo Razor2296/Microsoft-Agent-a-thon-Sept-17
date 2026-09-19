@@ -22,7 +22,7 @@ Return ONLY one JSON object (no markdown fences) with this shape:
   "media_id": "MED-001 or null",
   "steps": [
     {"action": "inspect_document|describe_media|synthesize|clarify|export_office",
-     "agent": "ignite-document-agent|ignite-media-agent|ignite-orchestrator-agent",
+     "agent": "ignite-document-agent|ignite-image-agent|ignite-audio-agent|ignite-video-agent|ignite-orchestrator-agent",
      "args": {}}
   ],
   "user_message_es": "short Spanish reply or empty if a later step will fill it",
@@ -113,10 +113,12 @@ def validate_plan(plan: dict[str, Any]) -> dict[str, Any]:
                 {"action": "synthesize", "agent": "ignite-orchestrator-agent", "args": {}},
             ]
         elif intent == "MEDIA_DESCRIBE" and media_id:
+            from agent_names import specialist_for_media_id
+
             steps = [
                 {
                     "action": "describe_media",
-                    "agent": "ignite-media-agent",
+                    "agent": specialist_for_media_id(media_id),
                     "args": {"media_id": media_id},
                 },
                 {"action": "synthesize", "agent": "ignite-orchestrator-agent", "args": {}},

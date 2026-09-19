@@ -89,10 +89,26 @@ class TestFoundryOrchestrationGodPath(unittest.TestCase):
             os.environ.pop("PROJECT_CONNECTION_STRING", None)
             self.orch._STATUS_LOGGED = False
 
-    def test_default_media_agent_is_image_tab(self):
-        self.assertEqual(self.runtime.MEDIA_AGENT(), "ignite-image-agent")
-        self.assertIn("ignite-image-agent", self.runtime.MEDIA_AGENT_ALIASES())
-        self.assertIn("ignite-media-agent", self.runtime.MEDIA_AGENT_ALIASES())
+    def test_canonical_specialists(self):
+        from agent_names import all_prompt_agents, specialist_for_media_id, specialist_for_modality
+
+        names = all_prompt_agents()
+        self.assertEqual(
+            names,
+            [
+                "ignite-orchestrator-agent",
+                "ignite-document-agent",
+                "ignite-image-agent",
+                "ignite-audio-agent",
+                "ignite-video-agent",
+            ],
+        )
+        self.assertEqual(specialist_for_modality("image"), "ignite-image-agent")
+        self.assertEqual(specialist_for_modality("audio"), "ignite-audio-agent")
+        self.assertEqual(specialist_for_modality("video"), "ignite-video-agent")
+        self.assertEqual(specialist_for_media_id("MED-AUD-001"), "ignite-audio-agent")
+        self.assertEqual(self.runtime.IMAGE_AGENT(), "ignite-image-agent")
+        self.assertEqual(self.runtime.MEDIA_AGENT(), "ignite-image-agent")  # legacy alias
 
     def test_runtime_traced_orchestration_offline(self):
         result = self.runtime.run_traced_orchestration(

@@ -17,15 +17,26 @@ from dotenv import load_dotenv
 
 from brain import execute_plan, heuristic_plan, run_turn
 from tools import load_documents
+from agent_names import (
+    audio_agent,
+    document_agent,
+    image_agent,
+    orchestrator_agent,
+    video_agent,
+    workflow_agent,
+)
 
 FOUNDRY_DIR = Path(__file__).resolve().parent
 load_dotenv(FOUNDRY_DIR / ".env")
 
 PROJECT_CONNECTION_STRING = (os.getenv("PROJECT_CONNECTION_STRING") or "").strip()
-DOCUMENT_AGENT = os.getenv("IGNITE_DOCUMENT_AGENT", "ignite-document-agent").strip()
-ORCHESTRATOR_AGENT = os.getenv("IGNITE_ORCHESTRATOR_AGENT", "ignite-orchestrator-agent").strip()
-MEDIA_AGENT = os.getenv("IGNITE_MEDIA_AGENT", "ignite-image-agent").strip()
-WORKFLOW_AGENT = os.getenv("IGNITE_WORKFLOW_AGENT", "ignite-document-workflow").strip()
+DOCUMENT_AGENT = document_agent()
+ORCHESTRATOR_AGENT = orchestrator_agent()
+IMAGE_AGENT = image_agent()
+AUDIO_AGENT = audio_agent()
+VIDEO_AGENT = video_agent()
+WORKFLOW_AGENT = workflow_agent()
+MEDIA_AGENT = IMAGE_AGENT  # legacy alias only
 
 
 def _client(*, preview: bool = False):
@@ -55,7 +66,17 @@ def ensure_agents() -> None:
     client = _client()
     names = {a.name for a in client.agents.list()}
     client.close()
-    missing = [n for n in (DOCUMENT_AGENT, ORCHESTRATOR_AGENT, MEDIA_AGENT) if n not in names]
+    missing = [
+        n
+        for n in (
+            DOCUMENT_AGENT,
+            ORCHESTRATOR_AGENT,
+            IMAGE_AGENT,
+            AUDIO_AGENT,
+            VIDEO_AGENT,
+        )
+        if n not in names
+    ]
     if missing:
         raise SystemExit(f"Missing agents {missing}. Run: python agents.py")
 
@@ -77,54 +98,39 @@ def run_brain_pipeline() -> None:
 
 
 def create_workflow_agent() -> str:
-    """Part B — visible graph: orchestrator (plan) → document → media → orchestrator."""
+    """Part B — visible graph: plan → document/image/audio/video → synthesize."""
     from azure.ai.projects.models import WorkflowAgentDefinition
 
-    # Sequential handoff matches Paso 3: sequence + information passed between agents.
+    steps = [
+        ("step_plan", ORCHESTRATOR_AGENT),
+        ("step_document", DOCUMENT_AGENT),
+        ("step_image", IMAGE_AGENT),
+        ("step_audio", AUDIO_AGENT),
+        ("step_video", VIDEO_AGENT),
+        ("step_synthesize", ORCHESTRATOR_AGENT),
+    ]
+    actions = ""
+    for step_id, agent_name in steps:
+        actions += (
+            "  - kind: InvokeAzureAgent\n"
+            f"    id: {step_id}\n"
+            "    agent:\n"
+            f"      name: {agent_name}\n"
+            "    conversationId: =System.ConversationId\n"
+            "    input:\n"
+            '      messages: ""\n'
+            "    output:\n"
+            "      autoSend: true\n"
+        )
     yaml_text = (
         "kind: Workflow\n"
         f"name: {WORKFLOW_AGENT}\n"
-        "description: Ignite Foundry brain — Plan then specialists (document/media) then reply\n"
+        "description: Ignite Foundry brain — Traces activate multi-agent story in one conversation\n"
         "trigger:\n"
         "  kind: OnConversationStart\n"
         "  id: trigger_start\n"
         "actions:\n"
-        "  - kind: InvokeAzureAgent\n"
-        "    id: step_plan\n"
-        "    agent:\n"
-        f"      name: {ORCHESTRATOR_AGENT}\n"
-        "    conversationId: =System.ConversationId\n"
-        "    input:\n"
-        '      messages: ""\n'
-        "    output:\n"
-        "      autoSend: true\n"
-        "  - kind: InvokeAzureAgent\n"
-        "    id: step_document\n"
-        "    agent:\n"
-        f"      name: {DOCUMENT_AGENT}\n"
-        "    conversationId: =System.ConversationId\n"
-        "    input:\n"
-        '      messages: ""\n'
-        "    output:\n"
-        "      autoSend: true\n"
-        "  - kind: InvokeAzureAgent\n"
-        "    id: step_media\n"
-        "    agent:\n"
-        f"      name: {MEDIA_AGENT}\n"
-        "    conversationId: =System.ConversationId\n"
-        "    input:\n"
-        '      messages: ""\n'
-        "    output:\n"
-        "      autoSend: true\n"
-        "  - kind: InvokeAzureAgent\n"
-        "    id: step_synthesize\n"
-        "    agent:\n"
-        f"      name: {ORCHESTRATOR_AGENT}\n"
-        "    conversationId: =System.ConversationId\n"
-        "    input:\n"
-        '      messages: ""\n'
-        "    output:\n"
-        "      autoSend: true\n"
+        f"{actions}"
         "  - kind: EndConversation\n"
         "    id: step_end\n"
     )
@@ -132,7 +138,7 @@ def create_workflow_agent() -> str:
     result = client.agents.create_version(
         agent_name=WORKFLOW_AGENT,
         definition=WorkflowAgentDefinition(workflow=yaml_text),
-        description="Ignite multi-agent workflow — Plan JSON brain + specialists",
+        description="Ignite multi-agent workflow — Plan JSON brain + 4 specialists",
     )
     print(f"Workflow agent: {result.name} v{result.version}")
     print("Visible in Foundry → Build → Agents (kind: workflow)")

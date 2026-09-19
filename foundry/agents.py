@@ -1,9 +1,14 @@
 """
 Level 3 — Agent design: Foundry agents for Ignite (Architect plane).
 
-  ignite-orchestrator-agent  BRAIN — emits Plan JSON (modality + steps)
-  ignite-document-agent      specialist (inspect_document tool)
-  ignite-media-agent         specialist (describe_media tool)
+Canonical names (Foundry Build → Agents — do not invent):
+  ignite-orchestrator-agent  BRAIN — Plan JSON
+  ignite-document-agent      document / Ignite API channel=document
+  ignite-image-agent         image  / channel=image
+  ignite-audio-agent         audio  / channel=audio
+  ignite-video-agent         video  / channel=video
+
+NO TOCAR remotes IgniteChat / IgniteAPI — solo este repo de concurso.
 
 Usage (from this folder, after az login):
   copy .env.example .env   # fill PROJECT_CONNECTION_STRING
@@ -19,6 +24,14 @@ from pathlib import Path
 
 from dotenv import load_dotenv
 
+from agent_names import (
+    all_prompt_agents,
+    audio_agent,
+    document_agent,
+    image_agent,
+    orchestrator_agent,
+    video_agent,
+)
 from media_tools import DESCRIBE_MEDIA_TOOL, describe_media, load_media
 from plan_schema import PLAN_JSON_SCHEMA_HINT
 from tools import INSPECT_DOCUMENT_TOOL, inspect_document, load_documents
@@ -32,9 +45,11 @@ MODEL_DEPLOYMENT_NAME = (
     or os.getenv("FOUNDRY_MODEL_DEPLOYMENT_NAME")
     or "gemini-2.5-flash"
 ).strip()
-DOCUMENT_AGENT = os.getenv("IGNITE_DOCUMENT_AGENT", "ignite-document-agent").strip()
-ORCHESTRATOR_AGENT = os.getenv("IGNITE_ORCHESTRATOR_AGENT", "ignite-orchestrator-agent").strip()
-MEDIA_AGENT = os.getenv("IGNITE_MEDIA_AGENT", "ignite-image-agent").strip()
+DOCUMENT_AGENT = document_agent()
+ORCHESTRATOR_AGENT = orchestrator_agent()
+IMAGE_AGENT = image_agent()
+AUDIO_AGENT = audio_agent()
+VIDEO_AGENT = video_agent()
 
 
 def _inspect_tool():
@@ -72,42 +87,45 @@ def _client():
 def create_document_agent(client):
     from azure.ai.projects.models import PromptAgentDefinition
 
-    instructions = """
-You are Ignite Document Agent — specialist extractor for the Ignite multi-agent system.
-When the user (or orchestrator plan) names a document id, call inspect_document.
-Return structured facts only from the tool result. Never invent patient or invoice fields.
-If the id is unknown, say so and list known ids.
-Keep answers short enough to read in a WhatsApp-style bubble.
-You do NOT decide routing — the orchestrator Plan JSON already chose EXTRACT.
-"""
     return client.agents.create_version(
         agent_name=DOCUMENT_AGENT,
         definition=PromptAgentDefinition(
             model=MODEL_DEPLOYMENT_NAME,
-            instructions=instructions,
+            instructions=(
+                "You are Ignite Document Agent — specialist for Ignite API document channel. "
+                "Call inspect_document for DOC-* ids. Return structured facts only. Never invent PHI."
+            ),
             tools=[_inspect_tool()],
         ),
     )
 
 
-def create_media_agent(client):
+def _create_modality_agent(client, agent_name: str, modality: str, id_prefix: str):
     from azure.ai.projects.models import PromptAgentDefinition
 
-    instructions = """
-You are Ignite Media Agent — specialist for image, audio, and video sample assets.
-When given a media id (MED-IMG-*, MED-AUD-*, MED-VID-*), call describe_media.
-Summarize caption + fields only from the tool. Never invent PHI.
-Suggest linking to a document id when fields.suggested_doc_id is present.
-You do NOT decide routing — the orchestrator Plan JSON already chose MEDIA_DESCRIBE.
-"""
     return client.agents.create_version(
-        agent_name=MEDIA_AGENT,
+        agent_name=agent_name,
         definition=PromptAgentDefinition(
             model=MODEL_DEPLOYMENT_NAME,
-            instructions=instructions,
+            instructions=(
+                f"You are Ignite {modality.title()} Agent — Ignite API channel={modality}. "
+                f"Call describe_media for {id_prefix} ids only. Summarize caption/fields. Never invent PHI."
+            ),
             tools=[_media_tool()],
         ),
     )
+
+
+def create_image_agent(client):
+    return _create_modality_agent(client, IMAGE_AGENT, "image", "MED-IMG-*")
+
+
+def create_audio_agent(client):
+    return _create_modality_agent(client, AUDIO_AGENT, "audio", "MED-AUD-*")
+
+
+def create_video_agent(client):
+    return _create_modality_agent(client, VIDEO_AGENT, "video", "MED-VID-*")
 
 
 def create_orchestrator_agent(client):
@@ -115,20 +133,11 @@ def create_orchestrator_agent(client):
 
     instructions = f"""
 You are Ignite Orchestrator — the BRAIN of the Foundry workflow.
-Your ONLY job on the first turn is to emit a structured Plan JSON that downstream
-agents and the local runner execute. Do not call tools yourself.
+Emit Plan JSON only. Route steps to:
+  ignite-document-agent | ignite-image-agent | ignite-audio-agent | ignite-video-agent
+Never invent other agent names.
 
 {PLAN_JSON_SCHEMA_HINT}
-
-Routing rules (mirror Ignite Chat operational verbs):
-- Document attach / extract / analyze / DOC-*** → modality=document, intent=EXTRACT,
-  steps: inspect_document then synthesize.
-- Image / audio / video / MED-*** → modality=image|audio|video, intent=MEDIA_DESCRIBE,
-  steps: describe_media then synthesize.
-- Export Word/Excel/PowerPoint → intent=EXPORT, action export_office.
-- Greeting / missing id → intent=CLARIFY.
-Align user_message_* language with the user. Never mention ClaimSight or insurance labs.
-Trace tags MUST include modality:* and intent:* for Foundry Tracing filters.
 """
     return client.agents.create_version(
         agent_name=ORCHESTRATOR_AGENT,
@@ -150,7 +159,7 @@ def _run_with_tools(openai_client, agent_name: str, input_text: str) -> str:
         extra_body=agent_ref,
     )
     while True:
-        calls = [item for item in response.output if item.type == "function_call"]
+        calls = [item for item in response.output if getattr(item, "type", None) == "function_call"]
         if not calls:
             break
         outputs = []
@@ -175,9 +184,9 @@ def _run_with_tools(openai_client, agent_name: str, input_text: str) -> str:
             conversation=conversation.id,
             extra_body=agent_ref,
         )
-    text = response.output_text
+    out = (response.output_text or "").strip()
     openai_client.conversations.delete(conversation_id=conversation.id)
-    return text
+    return out
 
 
 def main() -> int:
@@ -185,25 +194,39 @@ def main() -> int:
         print("Set PROJECT_CONNECTION_STRING in foundry/.env (Foundry project endpoint).")
         return 1
 
+    # Prefer runtime ensure (same path Chat uses) so names stay canonical.
+    try:
+        from runtime import ensure_agents_and_workflow
+
+        if ensure_agents_and_workflow(force=True):
+            print("Ensured via runtime:", ", ".join(all_prompt_agents()))
+        else:
+            print("runtime ensure returned False; falling back to direct create_version")
+    except Exception as exc:
+        print(f"runtime ensure failed ({exc}); direct create_version")
+
     client = _client()
     openai_client = client.get_openai_client()
     try:
-        doc_agent = create_document_agent(client)
-        media_agent = create_media_agent(client)
-        orch = create_orchestrator_agent(client)
-        print(f"Created {doc_agent.name} v{doc_agent.version}")
-        print(f"Created {media_agent.name} v{media_agent.version}")
-        print(f"Created {orch.name} v{orch.version}")
+        created = [
+            create_document_agent(client),
+            create_image_agent(client),
+            create_audio_agent(client),
+            create_video_agent(client),
+            create_orchestrator_agent(client),
+        ]
+        for agent in created:
+            print(f"Created {agent.name} v{agent.version}")
 
         ids = [d["doc_id"] for d in load_documents()]
         media_ids = [m["media_id"] for m in load_media()]
         print("\n--- Document agent ---")
         print(_run_with_tools(openai_client, DOCUMENT_AGENT, f"Extract DOC-001. Known ids: {ids}"))
-        print("\n--- Media agent ---")
+        print("\n--- Image agent ---")
         print(
             _run_with_tools(
                 openai_client,
-                MEDIA_AGENT,
+                IMAGE_AGENT,
                 f"Describe MED-IMG-001. Known ids: {media_ids}",
             )
         )
@@ -216,10 +239,7 @@ def main() -> int:
             )
         )
         print("\nAgents stay in Foundry → Build → Agents (do not delete).")
-        print(
-            "Chat auto-path: set FOUNDRY_ORCHESTRATION_ENABLED=true in app/.env — "
-            "runtime.py ensures agents/workflow and orchestrates under Traces on each turn."
-        )
+        print("Chat auto-path (Agent-a-thon snapshot only — NOT IgniteChat remote).")
     finally:
         client.close()
     return 0
