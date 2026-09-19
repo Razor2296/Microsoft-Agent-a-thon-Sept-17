@@ -42,17 +42,26 @@ Estado: `OPEN` | `DONE` | `DEFERRED` | `BLOCKED`
 
 ---
 
-## Create-if-missing (STD-005)
+## Create-if-missing (STD-005) — triggers
+
+Se ejecuta en **ambos** caminos del snapshot Agent-a-thon (no remotes de producto):
+
+| Trigger | Hook | Qué pasa |
+| --- | --- | --- |
+| Solo Chat (`Extrae DOC-001`, adjunta imagen, “analiza…”) | `maybe_run_foundry_turn` → `run_traced_orchestration` | Traces ON → **ensure** → workflow |
+| Chat → Ignite API extract | `notify_foundry_after_extract` → mismo `run_traced_orchestration` | Tras extract OK → **ensure** → workflow |
+
+`ensure_agents_and_workflow()` **siempre re-lista** el proyecto. Si borraste agentes en el portal, el próximo turno los vuelve a crear (doc/image/audio/video + orch + workflow).
 
 ```text
 list agents in project
-for each canonical name in all_prompt_agents() + workflow:
+for each canonical name:
     if missing → create_version(...)
-    if present → keep (optional FOUNDRY_REFRESH_AGENTS=true to republish)
-then invoke_workflow under Traces
+    if present → keep (FOUNDRY_REFRESH_AGENTS=true → republish)
+invoke_workflow under Traces
 ```
 
-Código: `foundry/runtime.ensure_agents_and_workflow()` + `foundry/agent_names.py`.
+Código: `foundry/runtime.py` + `foundry/agent_names.py`.
 Agentes **segregados** (STD-004): nunca un media genérico.
 
 ---
