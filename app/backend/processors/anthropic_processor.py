@@ -191,6 +191,82 @@ class AnthropicChat(BaseChat):
             logger.error(f"Initialization error: {e}", exc_info=True)
             raise ValueError(f"Failed to initialize AnthropicChat: {e}")
 
+    # Anthropic Messages API: decoded image payload must be <= 10 MiB.
+    _ANTHROPIC_MAX_IMAGE_BYTES_DEFAULT = 10 * 1024 * 1024
+
+    @staticmethod
+    def _anthropic_max_image_bytes() -> int:
+        raw = os.getenv("IGNITE_ANTHROPIC_MAX_IMAGE_BYTES", str(10 * 1024 * 1024))
+        try:
+            return max(1024, int(raw))
+        except (TypeError, ValueError):
+            return AnthropicChat._ANTHROPIC_MAX_IMAGE_BYTES_DEFAULT
+
+    @staticmethod
+    def _fit_anthropic_image_bytes(data_bytes: bytes, mime_type: str) -> Tuple[bytes, str]:
+        """Compress/resize until decoded size fits Anthropic's 10 MB image cap."""
+        max_bytes = AnthropicChat._anthropic_max_image_bytes()
+        mime = (mime_type or "image/jpeg").lower().split(";")[0].strip()
+        if mime in ("image/jpg", "image/pjpeg", "image/jfif"):
+            mime = "image/jpeg"
+        if len(data_bytes) <= max_bytes:
+            return data_bytes, mime
+
+        try:
+            img = Image.open(io.BytesIO(data_bytes))
+            img.load()
+        except Exception as open_err:
+            logger.warning(f"Cannot open oversized Anthropic image for compress: {open_err}")
+            return data_bytes, mime
+
+        has_alpha = img.mode in ("RGBA", "LA") or (img.mode == "P" and "transparency" in img.info)
+        try:
+            resampling = getattr(Image, "Resampling", Image)
+            resample = getattr(resampling, "LANCZOS", getattr(Image, "ANTIALIAS", 1))
+        except Exception:
+            resample = 1
+
+        work = img.convert("RGBA") if has_alpha else img.convert("RGB")
+        out_mime = "image/png" if has_alpha else "image/jpeg"
+        candidate, cand_mime = data_bytes, mime
+        original_size = len(data_bytes)
+
+        for dim in (2048, 1600, 1280, 1024, 768, 512, 384):
+            scaled = work.copy()
+            if max(scaled.size) > dim:
+                scaled.thumbnail((dim, dim), cast(Any, resample))
+            for quality in (85, 75, 65, 55, 45, 35):
+                buf = io.BytesIO()
+                use_jpeg = out_mime != "image/png" or quality < 65
+                if use_jpeg:
+                    if scaled.mode == "RGBA":
+                        rgb = Image.new("RGB", scaled.size, (255, 255, 255))
+                        rgb.paste(scaled, mask=scaled.split()[-1])
+                        rgb.save(buf, format="JPEG", quality=quality, optimize=True)
+                    else:
+                        scaled.convert("RGB").save(buf, format="JPEG", quality=quality, optimize=True)
+                    candidate, cand_mime = buf.getvalue(), "image/jpeg"
+                else:
+                    scaled.save(buf, format="PNG", optimize=True)
+                    candidate, cand_mime = buf.getvalue(), "image/png"
+                if len(candidate) <= max_bytes:
+                    logger.info(
+                        "Compressed Anthropic image from %s to %s bytes (max_dim=%s quality=%s)",
+                        original_size,
+                        len(candidate),
+                        dim,
+                        quality,
+                    )
+                    return candidate, cand_mime
+            work = scaled
+
+        logger.warning(
+            "Anthropic image still %s bytes after compress (limit %s); sending best-effort payload",
+            len(candidate),
+            max_bytes,
+        )
+        return candidate, cand_mime
+
     @staticmethod
     def _normalize_anthropic_image(data_bytes: bytes, mime_type: str) -> Tuple[bytes, str]:
         """
@@ -198,16 +274,17 @@ class AnthropicChat(BaseChat):
         'image/jpeg', 'image/png', 'image/gif', 'image/webp'.
         If the image is in another format (e.g. BMP, TIFF, SVG, ICO) or has an invalid/variant mime,
         converts it to PNG/JPEG using PIL so Anthropic accepts it without error.
+        Always fits under Anthropic's 10 MB decoded-image limit.
         """
         raw_mime = (mime_type or "").lower().split(";")[0].strip()
         if raw_mime in ("image/jpeg", "image/jpg", "image/pjpeg", "image/jfif"):
-            return data_bytes, "image/jpeg"
+            return AnthropicChat._fit_anthropic_image_bytes(data_bytes, "image/jpeg")
         elif raw_mime == "image/png":
-            return data_bytes, "image/png"
+            return AnthropicChat._fit_anthropic_image_bytes(data_bytes, "image/png")
         elif raw_mime == "image/gif":
-            return data_bytes, "image/gif"
+            return AnthropicChat._fit_anthropic_image_bytes(data_bytes, "image/gif")
         elif raw_mime == "image/webp":
-            return data_bytes, "image/webp"
+            return AnthropicChat._fit_anthropic_image_bytes(data_bytes, "image/webp")
 
         # Unsupported or unknown by Anthropic API (e.g. bmp, tiff, svg, avif, heic, unknown)
         try:
@@ -215,15 +292,15 @@ class AnthropicChat(BaseChat):
                 out_buf = io.BytesIO()
                 if img.mode in ("RGBA", "LA") or (img.mode == "P" and "transparency" in img.info):
                     img.save(out_buf, format="PNG")
-                    return out_buf.getvalue(), "image/png"
+                    return AnthropicChat._fit_anthropic_image_bytes(out_buf.getvalue(), "image/png")
                 else:
                     rgb_img = img.convert("RGB")
                     rgb_img.save(out_buf, format="JPEG", quality=92)
-                    return out_buf.getvalue(), "image/jpeg"
+                    return AnthropicChat._fit_anthropic_image_bytes(out_buf.getvalue(), "image/jpeg")
         except Exception as conv_err:
             logger.warning(f"Could not convert image with mime '{mime_type}' to supported Anthropic format: {conv_err}")
-            return data_bytes, "image/jpeg" if ("jpg" in raw_mime or "jpeg" in raw_mime) else "image/png"
-
+            fallback_mime = "image/jpeg" if ("jpg" in raw_mime or "jpeg" in raw_mime) else "image/png"
+            return AnthropicChat._fit_anthropic_image_bytes(data_bytes, fallback_mime)
     def _handle_empty_response(self, response: Any) -> str:
         """Helper to construct a descriptive error message when Anthropic response content is empty or moderated."""
         stop_reason = getattr(response, "stop_reason", None)
@@ -958,8 +1035,20 @@ class AnthropicChat(BaseChat):
                             media_type = (source.get("media_type") or "").lower().split(";")[0].strip()
                             if media_type in ("image/jpg", "image/pjpeg", "image/jfif"):
                                 source["media_type"] = "image/jpeg"
+                                media_type = "image/jpeg"
                             elif media_type not in valid_anthropic_mimes:
-                                source["media_type"] = "image/jpeg" if ("jpg" in media_type or "jpeg" in media_type) else "image/png"
+                                media_type = "image/jpeg" if ("jpg" in media_type or "jpeg" in media_type) else "image/png"
+                                source["media_type"] = media_type
+                            # History may retain oversized images from prior turns (Anthropic 10 MB cap).
+                            if source.get("type") == "base64" and isinstance(source.get("data"), str):
+                                try:
+                                    raw = base64.b64decode(source["data"])
+                                except Exception:
+                                    raw = b""
+                                if raw and len(raw) > AnthropicChat._anthropic_max_image_bytes():
+                                    fitted, fitted_mime = AnthropicChat._fit_anthropic_image_bytes(raw, media_type or "image/jpeg")
+                                    source["data"] = base64.b64encode(fitted).decode("utf-8")
+                                    source["media_type"] = fitted_mime
                         sanitized.append(block)
                     else:
                         sanitized.append(block)

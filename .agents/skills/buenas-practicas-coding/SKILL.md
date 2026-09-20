@@ -17,4 +17,6 @@ Al desarrollar o modificar código, sigue de forma estricta:
 
 Especificación completa: [references/SKILLS_CODING.md](references/SKILLS_CODING.md).
 
-* Anti-regresión Grok: pp/tests/unit/processors/test_vision_min_pixels.py debe seguir pasando (logos PDF/DOCX < 512 px no van a multimodal).
+* Anti-regresión Grok: `app/tests/unit/processors/test_vision_min_pixels.py` debe seguir pasando (logos PDF/DOCX < 512 px no van a multimodal).
+* Anti-regresión Anthropic: `test_anthropic_image_max_bytes.py` — imágenes >10 MiB se comprimen antes de Messages API.
+* Anti-regresión Perplexity: `test_perplexity_prompt_guard.py` — truncate + errores 429/context/timeout user-safe.
