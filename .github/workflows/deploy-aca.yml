@@ -1,5 +1,6 @@
-# main (after PR merge): build image + deploy ACA — same pattern as IgniteChat.
-# Device-code Azure login (SIU MFA/passkey). Optional AZURE_CREDENTIALS for unattended SP.
+# main (after PR merge): build this repo → push ACR → deploy ACA.
+# Same outcome as IgniteChat, but ACR auth uses Azure CLI after device-code login
+# (this public contest repo may not have ACR_USERNAME / ACR_PASSWORD GitHub secrets).
 name: Deploy Ignite Chat ACA (PAYG)
 
 on:
@@ -14,10 +15,10 @@ on:
 
 permissions:
   contents: read
-  id-token: write
 
 env:
   ACR_LOGIN_SERVER: igniteapisiuacr.azurecr.io
+  ACR_NAME: igniteapisiuacr
   IMAGE_NAME: ignitechat-api
   CONTAINER_APP_NAME: ignitechat-api
   RESOURCE_GROUP: IgniteAPI
@@ -49,33 +50,7 @@ jobs:
             echo "skip_build=false" >> "$GITHUB_OUTPUT"
           fi
 
-      - name: Login to ACR
-        if: steps.image.outputs.skip_build != 'true'
-        uses: docker/login-action@v3
-        with:
-          registry: ${{ env.ACR_LOGIN_SERVER }}
-          username: ${{ secrets.ACR_USERNAME }}
-          password: ${{ secrets.ACR_PASSWORD }}
-
-      - name: Set up Docker Buildx
-        if: steps.image.outputs.skip_build != 'true'
-        uses: docker/setup-buildx-action@v3
-
-      - name: Build & push image to ACR
-        if: steps.image.outputs.skip_build != 'true'
-        uses: docker/build-push-action@v5
-        with:
-          context: ./app
-          file: ./app/Dockerfile
-          platforms: linux/amd64
-          provenance: false
-          push: true
-          tags: |
-            ${{ env.ACR_LOGIN_SERVER }}/${{ env.IMAGE_NAME }}:${{ github.sha }}
-            ${{ env.ACR_LOGIN_SERVER }}/${{ env.IMAGE_NAME }}:latest
-
-      # SIU MFA/passkey blocks UPN/password in Actions. Default: device code (you approve in browser).
-      # Optional later: AZURE_CREDENTIALS (service principal) for unattended deploy.
+      # Device code FIRST — unlocks az acr login / credential show without GitHub ACR secrets.
       - name: Resolve Azure auth mode
         id: auth
         run: |
@@ -83,7 +58,7 @@ jobs:
             echo "mode=sp-json" >> "$GITHUB_OUTPUT"
           else
             echo "mode=device" >> "$GITHUB_OUTPUT"
-            echo "::notice title=Device login required::After build, open the Azure login step log, copy the code, visit https://microsoft.com/devicelogin (up to ${MFA_WAIT_SECONDS}s)."
+            echo "::notice title=Device login required::Open the Azure login step log, copy the code, visit https://microsoft.com/devicelogin (up to ${MFA_WAIT_SECONDS}s). Then the job builds/pushes and updates ACA."
           fi
 
       - name: Azure login
@@ -96,10 +71,51 @@ jobs:
           chmod +x scripts/ci/azure-login-gh.sh scripts/ci/deploy-ignitechat-aca.sh
           bash scripts/ci/azure-login-gh.sh
 
+      - name: Resolve ACR admin credentials
+        env:
+          SECRET_USER: ${{ secrets.ACR_USERNAME }}
+          SECRET_PASS: ${{ secrets.ACR_PASSWORD }}
+        run: |
+          set -euo pipefail
+          if [ -n "${SECRET_USER:-}" ] && [ -n "${SECRET_PASS:-}" ]; then
+            echo "Using GitHub secrets ACR_USERNAME / ACR_PASSWORD"
+            USER="${SECRET_USER}"
+            PASS="${SECRET_PASS}"
+          else
+            echo "No GitHub ACR secrets — fetching admin credentials via Azure CLI (device session)"
+            USER="$(az acr credential show --name "${ACR_NAME}" --query username -o tsv)"
+            PASS="$(az acr credential show --name "${ACR_NAME}" --query "passwords[0].value" -o tsv)"
+            if [ -z "${USER}" ] || [ -z "${PASS}" ]; then
+              echo "::error::Could not read ACR credentials. Enable admin user on ${ACR_NAME} or set ACR_USERNAME/ACR_PASSWORD repo secrets."
+              exit 1
+            fi
+          fi
+          echo "::add-mask::${PASS}"
+          {
+            echo "ACR_USERNAME<<EOF"
+            echo "${USER}"
+            echo "EOF"
+            echo "ACR_PASSWORD<<EOF"
+            echo "${PASS}"
+            echo "EOF"
+          } >> "${GITHUB_ENV}"
+
+      - name: Build & push image to ACR
+        if: steps.image.outputs.skip_build != 'true'
+        env:
+          IMAGE_TAG: ${{ steps.image.outputs.tag }}
+        run: |
+          set -euo pipefail
+          echo "${ACR_PASSWORD}" | docker login "${ACR_LOGIN_SERVER}" -u "${ACR_USERNAME}" --password-stdin
+          IMAGE="${ACR_LOGIN_SERVER}/${IMAGE_NAME}:${IMAGE_TAG}"
+          LATEST="${ACR_LOGIN_SERVER}/${IMAGE_NAME}:latest"
+          docker build -t "${IMAGE}" -t "${LATEST}" -f app/Dockerfile app
+          docker push "${IMAGE}"
+          docker push "${LATEST}"
+          echo "Pushed ${IMAGE} and ${LATEST}"
+
       - name: Deploy ignitechat-api (env + Key Vault refs)
         env:
-          ACR_USERNAME: ${{ secrets.ACR_USERNAME }}
-          ACR_PASSWORD: ${{ secrets.ACR_PASSWORD }}
           GITHUB_SHA: ${{ github.sha }}
           IMAGE_TAG: ${{ steps.image.outputs.tag }}
         run: bash scripts/ci/deploy-ignitechat-aca.sh
@@ -123,5 +139,5 @@ jobs:
             echo "- Health: https://${FQDN}/health"
             echo "- Extraction: ${IGNITE_EXTRACTION_API_URL}"
             echo "- Revision: \`${REV}\`"
-            echo "- Auth: device code (or AZURE_CREDENTIALS if set)"
+            echo "- Auth: device code → Azure CLI (ACR secrets optional)"
           } >> "$GITHUB_STEP_SUMMARY"

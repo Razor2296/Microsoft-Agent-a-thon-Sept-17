@@ -6,17 +6,14 @@ This public repo is a **Founderz / Level 3 Architect** submission. ACA deploy mi
 | --- | --- | --- |
 | `ci.yml` | push/PR | none — Chat pytest + Foundry offline tests |
 | `build-windows-installer.yml` | PR / manual | none |
-| `deploy-aca.yml` | **push to `main`** + `workflow_dispatch` | `ACR_USERNAME` / `ACR_PASSWORD`; Azure via **device code** (same as IgniteChat) or `AZURE_CREDENTIALS` |
+| `deploy-aca.yml` | **push to `main`** + `workflow_dispatch` | Azure via **device code** (required). Optional: `ACR_USERNAME` / `ACR_PASSWORD` or `AZURE_CREDENTIALS`. If ACR secrets are missing, the job reads ACR admin creds with `az acr credential show` after device login. |
 
 ## Device code (same as Ignite Chat)
 
 1. Merge to `main` (or Actions → **Deploy Ignite Chat ACA (PAYG)** → Run workflow with empty `image_tag`).  
-2. Job **builds** `app/Dockerfile` and pushes `:sha` + `:latest` to `igniteapisiuacr.azurecr.io/ignitechat-api`.  
-3. Open the **Azure login** step log.  
-4. Copy the code → https://microsoft.com/devicelogin (SIU MFA/passkey OK, up to ~15 min).  
-5. Job continues with `scripts/ci/azure-login-gh.sh` + `deploy-ignitechat-aca.sh` using the **new** image tag.
-
-To redeploy an existing tag without rebuilding, Run workflow and set `image_tag` (e.g. a previous SHA).
+2. Open the **Azure login** step log **first** — copy the code → https://microsoft.com/devicelogin (SIU MFA/passkey OK, up to ~15 min).  
+3. After login, the job builds `app/Dockerfile`, pushes `:sha` + `:latest` to `igniteapisiuacr.azurecr.io/ignitechat-api`, then updates ACA.  
+4. To redeploy an existing tag without rebuilding, set `image_tag` on `workflow_dispatch`.
 
 If `AZURE_CREDENTIALS` (SP JSON) is set, the workflow uses SP instead of device code.
 
