@@ -1,5 +1,5 @@
 # main (after PR merge): build image + deploy ACA — same pattern as IgniteChat.
-# Device-code Azure login (SIU MFA/passkey). Optional AZURE_CREDENTIALS for unattended SP.
+# Last step updates Container App to the newly pushed ACR image (device-code Azure login).
 name: Deploy Ignite Chat ACA (PAYG)
 
 on:
@@ -14,10 +14,10 @@ on:
 
 permissions:
   contents: read
-  id-token: write
 
 env:
   ACR_LOGIN_SERVER: igniteapisiuacr.azurecr.io
+  ACR_NAME: igniteapisiuacr
   IMAGE_NAME: ignitechat-api
   CONTAINER_APP_NAME: ignitechat-api
   RESOURCE_GROUP: IgniteAPI
@@ -49,6 +49,8 @@ jobs:
             echo "skip_build=false" >> "$GITHUB_OUTPUT"
           fi
 
+      # --- Same order as IgniteChat: ACR build/push, then device login, then ACA update ---
+
       - name: Login to ACR
         if: steps.image.outputs.skip_build != 'true'
         uses: docker/login-action@v3
@@ -74,8 +76,6 @@ jobs:
             ${{ env.ACR_LOGIN_SERVER }}/${{ env.IMAGE_NAME }}:${{ github.sha }}
             ${{ env.ACR_LOGIN_SERVER }}/${{ env.IMAGE_NAME }}:latest
 
-      # SIU MFA/passkey blocks UPN/password in Actions. Default: device code (you approve in browser).
-      # Optional later: AZURE_CREDENTIALS (service principal) for unattended deploy.
       - name: Resolve Azure auth mode
         id: auth
         run: |
@@ -83,7 +83,7 @@ jobs:
             echo "mode=sp-json" >> "$GITHUB_OUTPUT"
           else
             echo "mode=device" >> "$GITHUB_OUTPUT"
-            echo "::notice title=Device login required::After build, open the Azure login step log, copy the code, visit https://microsoft.com/devicelogin (up to ${MFA_WAIT_SECONDS}s)."
+            echo "::notice title=Device login required::After ACR push, open the Azure login step log, copy the code, visit https://microsoft.com/devicelogin (up to ${MFA_WAIT_SECONDS}s)."
           fi
 
       - name: Azure login
@@ -96,7 +96,8 @@ jobs:
           chmod +x scripts/ci/azure-login-gh.sh scripts/ci/deploy-ignitechat-aca.sh
           bash scripts/ci/azure-login-gh.sh
 
-      - name: Deploy ignitechat-api (env + Key Vault refs)
+      # LAST step (like IgniteChat): point Container App at the new ACR image.
+      - name: Update Container App from ACR image
         env:
           ACR_USERNAME: ${{ secrets.ACR_USERNAME }}
           ACR_PASSWORD: ${{ secrets.ACR_PASSWORD }}
@@ -123,5 +124,5 @@ jobs:
             echo "- Health: https://${FQDN}/health"
             echo "- Extraction: ${IGNITE_EXTRACTION_API_URL}"
             echo "- Revision: \`${REV}\`"
-            echo "- Auth: device code (or AZURE_CREDENTIALS if set)"
+            echo "- Flow: build/push ACR → device login → update ACA (same as IgniteChat)"
           } >> "$GITHUB_STEP_SUMMARY"
