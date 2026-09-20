@@ -10,9 +10,9 @@ This public repo is a **Founderz / Level 3 Architect** submission. ACA deploy mi
 
 | Workflow | Trigger | Role |
 | --- | --- | --- |
-| `ci.yml` | push/PR | Contest checks only (pytest / Foundry offline) — **not** deploy |
+| `ci.yml` | **PR only** (+ manual) | Contest checks (pytest / Foundry offline). Does **not** run on push to `main`. |
 | `build-windows-installer.yml` | PR / manual | Desktop installer |
-| `deploy-aca.yml` | **push to `main`** + `workflow_dispatch` | Build/push ACR + update ACA |
+| `deploy-aca.yml` | **push to `main`** + `workflow_dispatch` | Build/push ACR + update ACA (the only action on merge) |
 
 ## Secrets
 
