@@ -1,9 +1,7 @@
 name: Contest checks
 
-# Public Agent-a-thon snapshot — no ACR/ACA deploy (see .github/CONTEST-CI.md).
+# PR-only (same as IgniteChat). Merge to main → deploy-aca.yml only — no double action.
 on:
-  push:
-    branches: [main]
   pull_request:
     branches: [main]
   workflow_dispatch:
