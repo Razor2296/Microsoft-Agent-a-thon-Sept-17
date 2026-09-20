@@ -77,13 +77,13 @@ This document specifies the comprehensive technical standards for cloud infrastr
   - **Static Type Safety:** Runs `mypy app/` against backend schemas and core processors.
   - **Automated Testing Suite:** Runs `pytest app/tests/unit/ --cov=app --cov-report=xml --cov-fail-under=80` to enforce test coverage gates before PR merge eligibility.
 
-- **2. Continuous Deployment to ACA (`.github/workflows/deploy-aca.yml`):**
-  - **Trigger:** Direct push / merge to `main` branch.
+- **2. Continuous Deployment to ACA (\.github/workflows/deploy-aca.yml\):**
+  - **Trigger:** Push / merge to \main\ (and \workflow_dispatch\). Same pattern as IgniteChat.
   - **Execution Stages:**
-    1. **Checkout & Auth:** Authenticates to Azure via OpenID Connect (OIDC) or Azure Service Principal credentials (`AZURE_CREDENTIALS` / `AZURE_CLIENT_ID`).
-    2. **ACR Image Build & Push:** Authenticates to Azure Container Registry (`caacc1441625acr`), builds multi-stage Docker image tagged with Git SHA (`${{ github.sha }}`) and `latest`.
-    3. **Container App Update:** Dispatches `azure/container-apps-deploy-action@v2` targeting container app `ignitechat-api`, updating the active revision with zero-downtime blue/green traffic shifting.
-    4. **Post-Deployment Verification:** Executes automated smoke tests against `https://ignitechat-api.../health` to confirm successful rollout.
+    1. **Build & push:** Docker build of \pp/Dockerfile\ → ACR \igniteapisiuacr.azurecr.io/ignitechat-api\ tags \:sha\ and \:latest\ (needs \ACR_USERNAME\ / \ACR_PASSWORD\).
+    2. **Azure auth:** Default **device code** (SIU MFA/passkey via https://microsoft.com/devicelogin); optional \AZURE_CREDENTIALS\ SP.
+    3. **Container App update:** \scripts/ci/deploy-ignitechat-aca.sh\ points \ignitechat-api\ at the **new** image tag (env + Key Vault refs).
+    4. Skip rebuild: Run workflow with \image_tag\ set to an existing ACR tag.
 
 - **3. Manual & Local Deployment Fallback (`scripts/Deploy-IgniteChatAca.ps1`):**
   - PowerShell/WSL script allowing developers to manually build, tag, push, and deploy revisions directly via Azure CLI during offline emergency maintenance or direct staging tests.

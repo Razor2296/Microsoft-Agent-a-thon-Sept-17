@@ -1,17 +1,20 @@
-# Manual only — same device-code Azure login as IgniteChat.
-# Never runs on push (this public contest snapshot has no ACR/Azure secrets by default).
-name: Deploy Ignite Chat ACA (PAYG) — manual
+# main (after PR merge): build image + deploy ACA — same pattern as IgniteChat.
+# Device-code Azure login (SIU MFA/passkey). Optional AZURE_CREDENTIALS for unattended SP.
+name: Deploy Ignite Chat ACA (PAYG)
 
 on:
+  push:
+    branches: [main]
   workflow_dispatch:
     inputs:
       image_tag:
-        description: "ACR tag to deploy (default: latest already in PAYG ACR)"
+        description: "Skip rebuild and deploy this ACR tag (empty = build :sha + :latest then deploy)"
         required: false
-        default: "latest"
+        default: ""
 
 permissions:
   contents: read
+  id-token: write
 
 env:
   ACR_LOGIN_SERVER: igniteapisiuacr.azurecr.io
@@ -34,6 +37,45 @@ jobs:
     steps:
       - uses: actions/checkout@v4
 
+      - name: Resolve image tag
+        id: image
+        run: |
+          INPUT="${{ github.event.inputs.image_tag }}"
+          if [ -n "$INPUT" ]; then
+            echo "tag=$INPUT" >> "$GITHUB_OUTPUT"
+            echo "skip_build=true" >> "$GITHUB_OUTPUT"
+          else
+            echo "tag=${{ github.sha }}" >> "$GITHUB_OUTPUT"
+            echo "skip_build=false" >> "$GITHUB_OUTPUT"
+          fi
+
+      - name: Login to ACR
+        if: steps.image.outputs.skip_build != 'true'
+        uses: docker/login-action@v3
+        with:
+          registry: ${{ env.ACR_LOGIN_SERVER }}
+          username: ${{ secrets.ACR_USERNAME }}
+          password: ${{ secrets.ACR_PASSWORD }}
+
+      - name: Set up Docker Buildx
+        if: steps.image.outputs.skip_build != 'true'
+        uses: docker/setup-buildx-action@v3
+
+      - name: Build & push image to ACR
+        if: steps.image.outputs.skip_build != 'true'
+        uses: docker/build-push-action@v5
+        with:
+          context: ./app
+          file: ./app/Dockerfile
+          platforms: linux/amd64
+          provenance: false
+          push: true
+          tags: |
+            ${{ env.ACR_LOGIN_SERVER }}/${{ env.IMAGE_NAME }}:${{ github.sha }}
+            ${{ env.ACR_LOGIN_SERVER }}/${{ env.IMAGE_NAME }}:latest
+
+      # SIU MFA/passkey blocks UPN/password in Actions. Default: device code (you approve in browser).
+      # Optional later: AZURE_CREDENTIALS (service principal) for unattended deploy.
       - name: Resolve Azure auth mode
         id: auth
         run: |
@@ -41,7 +83,7 @@ jobs:
             echo "mode=sp-json" >> "$GITHUB_OUTPUT"
           else
             echo "mode=device" >> "$GITHUB_OUTPUT"
-            echo "::notice title=Device login required::Open the Azure login step log, copy the code, visit https://microsoft.com/devicelogin (up to ${MFA_WAIT_SECONDS}s)."
+            echo "::notice title=Device login required::After build, open the Azure login step log, copy the code, visit https://microsoft.com/devicelogin (up to ${MFA_WAIT_SECONDS}s)."
           fi
 
       - name: Azure login
@@ -59,7 +101,7 @@ jobs:
           ACR_USERNAME: ${{ secrets.ACR_USERNAME }}
           ACR_PASSWORD: ${{ secrets.ACR_PASSWORD }}
           GITHUB_SHA: ${{ github.sha }}
-          IMAGE_TAG: ${{ github.event.inputs.image_tag || 'latest' }}
+          IMAGE_TAG: ${{ steps.image.outputs.tag }}
         run: bash scripts/ci/deploy-ignitechat-aca.sh
 
       - name: Summary
@@ -75,10 +117,11 @@ jobs:
             --resource-group "${RESOURCE_GROUP}" \
             --query "properties.latestRevisionName" -o tsv)
           {
-            echo "### Manual PAYG deploy (contest snapshot)"
-            echo "- Image: \`${ACR_LOGIN_SERVER}/${IMAGE_NAME}:${{ github.event.inputs.image_tag || 'latest' }}\`"
+            echo "### Deploy completado (Agent-a-thon → PAYG ACA)"
+            echo "- Image: \`${ACR_LOGIN_SERVER}/${IMAGE_NAME}:${{ steps.image.outputs.tag }}\`"
             echo "- API: https://${FQDN}"
             echo "- Health: https://${FQDN}/health"
+            echo "- Extraction: ${IGNITE_EXTRACTION_API_URL}"
             echo "- Revision: \`${REV}\`"
             echo "- Auth: device code (or AZURE_CREDENTIALS if set)"
           } >> "$GITHUB_STEP_SUMMARY"
