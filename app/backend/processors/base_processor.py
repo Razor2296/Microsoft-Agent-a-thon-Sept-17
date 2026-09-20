@@ -2382,15 +2382,19 @@ class BaseChat:
                             mime = f"image/{ext}"
                         else:
                             mime = "image/png"
-                        try:
-                            img_bytes = self._resize_image_data(img_bytes, max_dim=1024)
-                        except Exception as resize_err:
-                            logger.warning(f"Could not resize docx image {img_name}: {resize_err}")
+                        prepared = self._prepare_image_for_vision_api(
+                            img_bytes, mime_type=mime, name=img_name, max_dim=1024
+                        )
+                        if not prepared:
+                            continue
+                        img_bytes, mime = prepared
                         images.append({
                             "name": img_name,
                             "bytes": img_bytes,
                             "mime_type": mime
                         })
+                        if len(images) >= 5:
+                            break
             logger.info(f"Extracted {len(images)} images from docx document")
         except Exception as e:
             logger.warning(f"Failed to extract images from docx: {e}")
@@ -2440,10 +2444,12 @@ class BaseChat:
                             mime = f"image/{ext}"
                         else:
                             mime = "image/png"
-                        try:
-                            img_bytes = self._resize_image_data(img_bytes, max_dim=1024)
-                        except Exception as resize_err:
-                            logger.warning(f"Could not resize pdf image {img_name}: {resize_err}")
+                        prepared = self._prepare_image_for_vision_api(
+                            img_bytes, mime_type=mime, name=img_name, max_dim=1024
+                        )
+                        if not prepared:
+                            continue
+                        img_bytes, mime = prepared
                         images.append({
                             "name": img_name,
                             "bytes": img_bytes,
@@ -2456,7 +2462,7 @@ class BaseChat:
             logger.info(f"Extracted {len(images)} images from pdf document")
         except Exception as e:
             logger.warning(f"Failed to extract images from pdf: {e}")
-        return images[:5]  # Limit to 5 images â€” sufficient for document analysis, avoids token overload
+        return images[:5]  # Limit to 5 images — sufficient for document analysis, avoids token overload
 
     def _extract_text_from_image_via_ocr(self, img_bytes: bytes) -> str:
         """Runs local Tesseract OCR on image bytes and returns the extracted text."""
@@ -2527,6 +2533,50 @@ class BaseChat:
         except Exception as e:
             logger.warning(f"Error resizing image data: {e}")
         return image_bytes
+
+    def _image_pixel_count(self, image_bytes: bytes) -> Optional[int]:
+        """Return width*height for image bytes, or None if unreadable."""
+        try:
+            with Image.open(io.BytesIO(image_bytes)) as img:
+                return int(img.width) * int(img.height)
+        except Exception as e:
+            logger.warning(f"Could not measure image pixels: {e}")
+            return None
+
+    def _is_vision_api_image_viable(self, image_bytes: bytes, name: str = "") -> bool:
+        """True if image meets provider vision minimums (Grok rejects total pixels < 512)."""
+        pixels = self._image_pixel_count(image_bytes)
+        if pixels is None:
+            return False
+        min_pixels = vision_min_image_pixels()
+        if pixels < min_pixels:
+            label = name or "image"
+            logger.info(
+                "Skipping vision image '%s': %s total pixels (below minimum of %s)",
+                label,
+                pixels,
+                min_pixels,
+            )
+            return False
+        return True
+
+    def _prepare_image_for_vision_api(
+        self,
+        image_bytes: bytes,
+        mime_type: str = "image/png",
+        name: str = "",
+        max_dim: int = 1024,
+    ) -> Optional[Tuple[bytes, str]]:
+        """Normalize + downscale + drop tiny logos so multimodal APIs (e.g. Grok) accept the image."""
+        try:
+            scaled = self._resize_image_data(image_bytes, max_dim=max_dim)
+        except Exception:
+            scaled = image_bytes
+        clean_bytes, valid_mime = self.normalize_image_media_type(mime_type, scaled)
+        payload = clean_bytes or scaled
+        if not self._is_vision_api_image_viable(payload, name=name):
+            return None
+        return payload, valid_mime
 
     # Function that checks if a file is a text or programming/code file based on mime type or extension
     @staticmethod
@@ -3553,6 +3603,11 @@ def pdf_summary_sample_pages() -> int:
 
 def pdf_image_page_scan_limit() -> int:
     return _env_positive_int("IGNITE_PDF_IMAGE_PAGE_SCAN_LIMIT", 8, 1)
+
+
+def vision_min_image_pixels() -> int:
+    """Grok multimodal rejects images with total pixels below this (default 512)."""
+    return _env_positive_int("IGNITE_VISION_MIN_IMAGE_PIXELS", 512, 1)
 
 
 def pdf_native_max_bytes() -> int:
