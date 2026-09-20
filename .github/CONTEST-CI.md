@@ -1,21 +1,32 @@
 # Contest CI — Microsoft Agent-a-thon snapshot
 
-This public repo is a **Founderz / Level 3 Architect** submission. ACA deploy mirrors [IgniteChat](https://github.com/Razor2296/IgniteChat): **build this repo’s `app/` → push ACR → update `ignitechat-api`** so the container gets the new commit (not a stale `:latest`).
+This public repo is a **Founderz / Level 3 Architect** submission. ACA deploy mirrors [IgniteChat](https://github.com/Razor2296/IgniteChat):
 
-| Workflow | Trigger | Secrets |
+**one action** — **Deploy Ignite Chat ACA (PAYG)** — order:
+
+1. Build `app/Dockerfile` → push ACR `:sha` + `:latest`
+2. Azure **device code** login (SIU MFA/passkey)
+3. **Last step:** update Container App `ignitechat-api` to that ACR image
+
+| Workflow | Trigger | Role |
 | --- | --- | --- |
-| `ci.yml` | push/PR | none — Chat pytest + Foundry offline tests |
-| `build-windows-installer.yml` | PR / manual | none |
-| `deploy-aca.yml` | **push to `main`** + `workflow_dispatch` | Azure via **device code** (required). Optional: `ACR_USERNAME` / `ACR_PASSWORD` or `AZURE_CREDENTIALS`. If ACR secrets are missing, the job reads ACR admin creds with `az acr credential show` after device login. |
+| `ci.yml` | push/PR | Contest checks only (pytest / Foundry offline) — **not** deploy |
+| `build-windows-installer.yml` | PR / manual | Desktop installer |
+| `deploy-aca.yml` | **push to `main`** + `workflow_dispatch` | Build/push ACR + update ACA |
 
-## Device code (same as Ignite Chat)
+## Secrets
 
-1. Merge to `main` (or Actions → **Deploy Ignite Chat ACA (PAYG)** → Run workflow with empty `image_tag`).  
-2. Open the **Azure login** step log **first** — copy the code → https://microsoft.com/devicelogin (SIU MFA/passkey OK, up to ~15 min).  
-3. After login, the job builds `app/Dockerfile`, pushes `:sha` + `:latest` to `igniteapisiuacr.azurecr.io/ignitechat-api`, then updates ACA.  
-4. To redeploy an existing tag without rebuilding, set `image_tag` on `workflow_dispatch`.
+| Secret | Required |
+| --- | --- |
+| `ACR_USERNAME` / `ACR_PASSWORD` | Yes — ACR push + ACA registry binding (same as IgniteChat) |
+| `AZURE_CREDENTIALS` | Optional SP; default is **device code** |
 
-If `AZURE_CREDENTIALS` (SP JSON) is set, the workflow uses SP instead of device code.
+## Device code
+
+1. Merge to `main` (or Run workflow with empty `image_tag`).  
+2. Wait for **Build & push image to ACR** to finish.  
+3. Open **Azure login** → https://microsoft.com/devicelogin (up to ~15 min).  
+4. Last step updates ACA to the new image.
 
 ## Foundry (contest plane)
 
