@@ -18,3 +18,5 @@ Reglas críticas anti-regresión:
 - Preview archivos (WhatsApp): burbuja `wa-file-card` + overlay `#file-preview-overlay`; `filesForUi` sin PDF/PPTX `base64` completo (sí `preview_base64`); historial conserva miniatura; `collectMessageFileGroup` vía `fileFromPreviewElement`. Overlay PDF = pdf.js canvas (no iframe blob). Download = `save_file_to_downloads`.
 
 * 🖼️ **Grok + PDF/DOCX:** omitir imágenes con width*height < IGNITE_VISION_MIN_IMAGE_PIXELS (default 512) vía _prepare_image_for_vision_api — evita invalid_image por logos diminutos. No upscale.
+* 🖼️ **Anthropic:** comprimir imágenes > IGNITE_ANTHROPIC_MAX_IMAGE_BYTES (default 10 MiB) antes de Messages API — evita 400 image too large.
+* 🔍 **Perplexity:** sin vision nativo (describe_image Gemini); truncar prompt IGNITE_PERPLEXITY_MAX_PROMPT_CHARS; comprimir describe IGNITE_DESCRIBE_IMAGE_MAX_BYTES; errores 429/context/timeout user-safe.

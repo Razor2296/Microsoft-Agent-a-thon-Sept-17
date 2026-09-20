@@ -340,6 +340,11 @@ PERPLEXITY_TEMPERATURE              = float(os.getenv("PERPLEXITY_TEMPERATURE", 
 PERPLEXITY_TOP_P                    = float(os.getenv("PERPLEXITY_TOP_P", "0.9"))
 PERPLEXITY_RETRY_SEQUENCE           = [int(x.strip()) for x in os.getenv("PERPLEXITY_RETRY_SEQUENCE", "1, 2, 3, 5, 8").split(",")]
 PERPLEXITY_PROFILE_PICTURE_PATH     = _resolve_asset_path("PERPLEXITY_PROFILE_PICTURE_PATH", "assets/perplexity-color.svg")
+# Sonar context is smaller than Gemini/OpenAI; large PDF + image descriptions blow the prompt.
+try:
+    PERPLEXITY_MAX_PROMPT_CHARS = int(os.getenv("IGNITE_PERPLEXITY_MAX_PROMPT_CHARS", "100000"))
+except (TypeError, ValueError):
+    PERPLEXITY_MAX_PROMPT_CHARS = 100000
 
 # Alibaba Cloud configuration parameters
 ALIBABACLOUD_API_KEY                  = os.getenv("ALIBABACLOUD_API_KEY", "")
@@ -2958,6 +2963,32 @@ class BaseChat:
         try:
             clean_bytes, valid_mime = self.normalize_image_media_type(mime_type, image_bytes)
             scaled_bytes = self._resize_image_data(clean_bytes or image_bytes, max_dim=1024)
+            # Large PNG/JPEG after resize can still blow Gemini/aux path; compress further.
+            if hasattr(self, "_is_vision_api_image_viable") and not self._is_vision_api_image_viable(
+                scaled_bytes, name="describe_image"
+            ):
+                return "[Skipped tiny decorative image below vision minimum.]"
+            try:
+                # Prefer JPEG under ~4 MB for describe_image stability (Perplexity/DeepSeek path).
+                max_desc_bytes = int(os.getenv("IGNITE_DESCRIBE_IMAGE_MAX_BYTES", str(4 * 1024 * 1024)))
+            except (TypeError, ValueError):
+                max_desc_bytes = 4 * 1024 * 1024
+            if len(scaled_bytes) > max_desc_bytes:
+                try:
+                    with Image.open(io.BytesIO(scaled_bytes)) as img:
+                        rgb = img.convert("RGB")
+                        for quality in (80, 65, 50, 35):
+                            buf = io.BytesIO()
+                            rgb.save(buf, format="JPEG", quality=quality, optimize=True)
+                            if len(buf.getvalue()) <= max_desc_bytes:
+                                scaled_bytes = buf.getvalue()
+                                valid_mime = "image/jpeg"
+                                break
+                        else:
+                            scaled_bytes = buf.getvalue()
+                            valid_mime = "image/jpeg"
+                except Exception as compress_err:
+                    logger.warning(f"describe_image compress failed: {compress_err}")
             image_part = types.Part.from_bytes(data=scaled_bytes, mime_type=valid_mime)
             prompt_part = types.Part.from_text(
                 text=(

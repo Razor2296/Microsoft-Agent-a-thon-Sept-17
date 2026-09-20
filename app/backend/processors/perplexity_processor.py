@@ -24,6 +24,7 @@ from backend.processors.base_processor import (
     PERPLEXITY_TEMPERATURE,
     PERPLEXITY_TOP_P,
     PERPLEXITY_RETRY_SEQUENCE,
+    PERPLEXITY_MAX_PROMPT_CHARS,
     GEMINI_API_KEY,
     get_assistant_logger,
     get_user_country_code,
@@ -188,6 +189,73 @@ class PerplexityChat(BaseChat):
                 return f"The model returned an empty response. Finish reason: {finish_reason}"
         return "The model returned an empty response"
 
+    @staticmethod
+    def _truncate_for_perplexity(text: str, max_chars: Optional[int] = None) -> str:
+        """Cap user/file prompt size so Sonar does not 400 on oversized PDF+describe contexts."""
+        limit = max_chars if max_chars is not None else PERPLEXITY_MAX_PROMPT_CHARS
+        if not text or limit <= 0 or len(text) <= limit:
+            return text
+        marker = (
+            "\n\n[SYSTEM NOTE: Content truncated for Perplexity context limits. "
+            "Ask the user to attach a shorter excerpt or switch to Gemini/Anthropic for full documents.]"
+        )
+        keep = max(0, limit - len(marker))
+        logger.warning(
+            "Truncating Perplexity prompt from %s to %s chars (limit=%s)",
+            len(text),
+            keep,
+            limit,
+        )
+        if keep == 0:
+            return text[:limit]
+        return text[:keep] + marker
+
+    @staticmethod
+    def _useful_image_desc(desc: str) -> bool:
+        """Skip empty / skipped / hard-fail describe_image notes so they do not pollute Sonar context."""
+        if not desc or not str(desc).strip():
+            return False
+        low = str(desc).strip().lower()
+        if low.startswith("[skipped tiny"):
+            return False
+        if low.startswith("[error analyzing image"):
+            return False
+        if low.startswith("[error: gemini client"):
+            return False
+        return True
+
+    @staticmethod
+    def _format_perplexity_api_error(exc: BaseException) -> str:
+        """Map common Sonar failures to short user-safe messages."""
+        err = str(exc) or type(exc).__name__
+        low = err.lower()
+        if "429" in err or "rate limit" in low or "too many requests" in low:
+            return (
+                "Error: Perplexity rate limit. Wait a moment and retry, "
+                "or switch to another model."
+            )
+        if any(
+            token in low
+            for token in (
+                "context",
+                "too large",
+                "maximum context",
+                "max tokens",
+                "token limit",
+                "payload too large",
+                "request too large",
+            )
+        ):
+            return (
+                "Error: Content sent to Perplexity is too large. "
+                "Try a shorter file/excerpt or use Gemini/Anthropic for full documents."
+            )
+        if "timeout" in low or "timed out" in low:
+            return "Error: Perplexity request timed out. Please retry."
+        if "401" in err or "unauthorized" in low or "invalid api key" in low:
+            return "Error: Perplexity API key invalid or unauthorized."
+        return f"Error: {err}"
+
     # Function to generate response
     def generate_response(
         self,
@@ -341,6 +409,7 @@ class PerplexityChat(BaseChat):
                 "If you omit the `[GENERATE_IMAGE: ...]` tag, the image will not be generated.]"
             )
 
+        user_input = self._truncate_for_perplexity(user_input)
         messages.append({"role": "user", "content": user_input})
         logger.info(f"Messages: {messages}")
 
@@ -383,7 +452,7 @@ class PerplexityChat(BaseChat):
             return reply, self._flush_aux_tokens(token_info)
         except Exception as e:
             logger.error(f"Perplexity error: {e}")
-            return f"Error: {str(e)}", None
+            return self._format_perplexity_api_error(e), None
 
     # Function to generate response with inline files
     def generate_response_with_inline_files(
@@ -530,7 +599,8 @@ class PerplexityChat(BaseChat):
             if mime.startswith("image/"):
                 logger.info(f"Describing image for Perplexity: {name}")
                 image_desc = self.describe_image(file_bytes, mime)
-                file_contexts.append(f"[SYSTEM NOTE: The user uploaded an image named '{name}'. The system analyzed this image using Gemini Flash and generated the following detailed visual description/transcription of it. Please refer to this description directly to address the user's questions about the image:]\n\n{image_desc}")
+                if self._useful_image_desc(image_desc):
+                    file_contexts.append(f"[SYSTEM NOTE: The user uploaded an image named '{name}'. The system analyzed this image using Gemini Flash and generated the following detailed visual description/transcription of it. Please refer to this description directly to address the user's questions about the image:]\n\n{image_desc}")
             elif mime.startswith("audio/"):
                 logger.info(f"Transcribing audio for Perplexity: {name}")
                 transcription, err = self.transcribe_audio(file_bytes, mime)
@@ -551,7 +621,8 @@ class PerplexityChat(BaseChat):
                 docx_images = self._extract_images_from_docx(file_bytes)
                 for img in docx_images:
                     img_desc = self.describe_image(img["bytes"], img.get("mime_type", "image/png"))
-                    file_contexts.append(f"[SYSTEM NOTE: Image '{img['name']}' extracted from Word document '{name}']:\n\n{img_desc}")
+                    if self._useful_image_desc(img_desc):
+                        file_contexts.append(f"[SYSTEM NOTE: Image '{img['name']}' extracted from Word document '{name}']:\n\n{img_desc}")
             elif mime == "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet" or name.lower().endswith(".xlsx"):
                 text = self._extract_text_from_xlsx(file_bytes)
                 file_contexts.append(f"[SYSTEM NOTE: The user uploaded an Excel spreadsheet '{name}'. Its text has been automatically extracted for you below. DO NOT refuse to analyze it. DO NOT say you cannot read spreadsheets. Analyze the following text directly:]\n\n{text}")
@@ -565,7 +636,8 @@ class PerplexityChat(BaseChat):
                 pdf_images = self._extract_images_from_pdf(file_bytes)
                 for img in pdf_images:
                     img_desc = self.describe_image(img["bytes"], img.get("mime_type", "image/png"))
-                    file_contexts.append(f"[SYSTEM NOTE: Image '{img['name']}' extracted from PDF '{name}']:\n\n{img_desc}")
+                    if self._useful_image_desc(img_desc):
+                        file_contexts.append(f"[SYSTEM NOTE: Image '{img['name']}' extracted from PDF '{name}']:\n\n{img_desc}")
             elif self._is_text_or_code_file(mime, name):
                 text = self._try_decode_as_text(file_bytes, mime, name)
                 if text is not None:
@@ -616,6 +688,7 @@ class PerplexityChat(BaseChat):
                 "If you omit the `[GENERATE_IMAGE: ...]` tag, the image will not be generated.]"
             )
 
+        user_input = self._truncate_for_perplexity(user_input)
         messages.append({"role": "user", "content": user_input})
         logger.info(f"Messages with files: {messages}")
 
@@ -658,7 +731,7 @@ class PerplexityChat(BaseChat):
             return reply, self._flush_aux_tokens(token_info)
         except Exception as e:
             logger.error(f"Perplexity error: {e}")
-            return f"Error: {str(e)}", None
+            return self._format_perplexity_api_error(e), None
 
     def _clean_messages_for_alternation(self, messages: List[Dict[str, Any]]) -> List[Dict[str, Any]]:
         system_messages = [m for m in messages if m["role"] == "system"]
