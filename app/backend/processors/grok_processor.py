@@ -484,8 +484,13 @@ class GrokChat(BaseChat):
                     ocr_text = self._extract_text_from_image_via_ocr(file_bytes)
                     file_contexts.append(f"[SYSTEM NOTE: OCR text extracted from screenshot '{name}']:\n\n{ocr_text}")
                 else:
-                    clean_bytes, valid_mime = self.normalize_image_media_type(mime, file_bytes)
-                    b64_data = base64.b64encode(clean_bytes or file_bytes).decode("utf-8")
+                    prepared = self._prepare_image_for_vision_api(
+                        file_bytes, mime_type=mime, name=name, max_dim=1024
+                    )
+                    if not prepared:
+                        continue
+                    clean_bytes, valid_mime = prepared
+                    b64_data = base64.b64encode(clean_bytes).decode("utf-8")
                     image_payloads.append({
                         "type": "image_url",
                         "image_url": {
@@ -518,8 +523,16 @@ class GrokChat(BaseChat):
                         file_contexts.append(f"[SYSTEM NOTE: OCR text extracted from screenshot '{img['name']}' inside Word document]:\n\n{ocr_text}")
                 else:
                     for img in docx_images:
-                        clean_bytes, valid_mime = self.normalize_image_media_type(img.get("mime_type", "image/png"), img["bytes"])
-                        b64_img = base64.b64encode(clean_bytes or img["bytes"]).decode("utf-8")
+                        prepared = self._prepare_image_for_vision_api(
+                            img["bytes"],
+                            mime_type=img.get("mime_type", "image/png"),
+                            name=img.get("name", "docx_image"),
+                            max_dim=1024,
+                        )
+                        if not prepared:
+                            continue
+                        clean_bytes, valid_mime = prepared
+                        b64_img = base64.b64encode(clean_bytes).decode("utf-8")
                         image_payloads.append({
                             "type": "image_url",
                             "image_url": {
@@ -545,8 +558,16 @@ class GrokChat(BaseChat):
                         file_contexts.append(f"[SYSTEM NOTE: OCR text extracted from screenshot '{img['name']}' inside PDF]:\n\n{ocr_text}")
                 else:
                     for img in pdf_images:
-                        clean_bytes, valid_mime = self.normalize_image_media_type(img.get("mime_type", "image/png"), img["bytes"])
-                        b64_img = base64.b64encode(clean_bytes or img["bytes"]).decode("utf-8")
+                        prepared = self._prepare_image_for_vision_api(
+                            img["bytes"],
+                            mime_type=img.get("mime_type", "image/png"),
+                            name=img.get("name", "pdf_image"),
+                            max_dim=1024,
+                        )
+                        if not prepared:
+                            continue
+                        clean_bytes, valid_mime = prepared
+                        b64_img = base64.b64encode(clean_bytes).decode("utf-8")
                         image_payloads.append({
                             "type": "image_url",
                             "image_url": {

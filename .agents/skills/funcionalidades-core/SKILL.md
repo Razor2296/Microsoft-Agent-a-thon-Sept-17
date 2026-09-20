@@ -16,3 +16,5 @@ Reglas críticas anti-regresión:
 - Runtime: default desktop `IGNITE_RUNTIME_MODE=local` (capabilities ≡ launcher ≡ `.env.example`).
 - Documentos largos: PDF nativo Gemini/Anthropic; poll UI ≥ LLM HTTP ≥ Cloud Run; umbrales vía `.env` (`IGNITE_DOCUMENT_POLL_TIMEOUT_MS`, `IGNITE_PDF_*`). Prohibido recortar un libro a 12 páginas o cancelar a los 6 min.
 - Preview archivos (WhatsApp): burbuja `wa-file-card` + overlay `#file-preview-overlay`; `filesForUi` sin PDF/PPTX `base64` completo (sí `preview_base64`); historial conserva miniatura; `collectMessageFileGroup` vía `fileFromPreviewElement`. Overlay PDF = pdf.js canvas (no iframe blob). Download = `save_file_to_downloads`.
+
+* 🖼️ **Grok + PDF/DOCX:** omitir imágenes con width*height < IGNITE_VISION_MIN_IMAGE_PIXELS (default 512) vía _prepare_image_for_vision_api — evita invalid_image por logos diminutos. No upscale.
