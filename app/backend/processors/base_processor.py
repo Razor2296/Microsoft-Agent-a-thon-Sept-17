@@ -461,6 +461,76 @@ def resolve_reply_language(
     return detect_user_conversation_language(user_input or "", history=history)
 
 
+def multimodal_describe_prompt(lang_name: str, media: str = "image") -> str:
+    """Gemini vision/video describe prompt; narrative MUST match reply language.
+
+    English-only describe prompts bias text-only models (DeepSeek) into English
+    even when force_language is Spanish — including safety/privacy refusals.
+    """
+    name = (lang_name or resolve_lang_name(None) or "English").strip()
+    lang_tail = (
+        f" Write the ENTIRE narrative in {name}. "
+        f"Do not switch to English unless {name} is English."
+    )
+    if (media or "image").lower().startswith("video"):
+        return (
+            "Analyze this video thoroughly and write a detailed, natural narrative of everything that happens. "
+            "Include: what is shown visually scene by scene, all spoken words and dialogue (written as direct quotes), "
+            "any text visible on screen, and the overall context or topic. "
+            "Do NOT use the words 'transcription' or 'transcript' anywhere. "
+            "Write in flowing prose as if you are directly watching and listening to the video."
+            + lang_tail
+        )
+    return (
+        "Analyze this image thoroughly. Write a detailed, natural, first-person narrative description of everything you see: "
+        "objects, people, colors, text on screen, layout, mood, and any other relevant details. "
+        "Do NOT use the words 'transcription', 'transcript', or 'description'. "
+        "Write it as flowing prose as if you are directly observing it."
+        + lang_tail
+    )
+
+
+def mandatory_reply_language_note(target_lang: str, lang_name: str) -> str:
+    """Provider-agnostic mandatory reply-language system note (text + multimodal)."""
+    if (target_lang or "").lower().startswith("es"):
+        return (
+            "[INSTRUCCIÓN MANDATORIA DE IDIOMA] ¡DEBES RESPONDER ÚNICAMENTE EN ESPAÑOL! "
+            "El usuario se comunica en español (incluso si usa jerga, modismos o faltas de ortografía). "
+            "Ignora el inglés de descripciones de imagen/video, resultados de búsqueda o notas del sistema. "
+            "TODA tu respuesta DEBE estar 100% en Español — incluidas negativas, límites de privacidad "
+            "(p. ej. no identificar personas) y mensajes de seguridad — "
+            "a menos que el usuario solicite explícitamente cambiar de idioma."
+        )
+    return (
+        f"[MANDATORY LANGUAGE INSTRUCTION] You MUST reply ONLY in {lang_name}! "
+        f"Ignore the language of any image/video descriptions, web search results, or scraped context. "
+        f"Reply entirely in {lang_name} — including refusals, privacy boundaries, and safety messages — "
+        f"UNLESS the user explicitly requests to switch to a different language."
+    )
+
+
+def wrap_user_query_for_language(user_query: Optional[str], target_lang: str, lang_name: str) -> str:
+    """Label the user turn so every provider sees the same reply-language contract."""
+    q = user_query if user_query is not None else ""
+    if (target_lang or "").lower().startswith("es"):
+        return f"[Consulta del Usuario (Responde enteramente en ESPAÑOL)]:\n{q}"
+    return f"[User Query (Reply entirely in {lang_name})]:\n{q}"
+
+
+def append_mandatory_reply_language(
+    system_notes: List[str],
+    force_language: Optional[str] = None,
+    user_input: Optional[str] = "",
+    history: Optional[List[Dict[str, Any]]] = None,
+) -> Tuple[str, str]:
+    """Resolve reply language and append the shared mandatory note. Same call site for all providers."""
+    target_lang, lang_name = resolve_reply_language(
+        force_language, user_input=user_input or "", history=history
+    )
+    system_notes.append(mandatory_reply_language_note(target_lang, lang_name))
+    return target_lang, lang_name
+
+
 # Base class for chat processors
 class BaseChat:
     """Base class for chat processors providing shared utilities."""
@@ -2950,7 +3020,12 @@ class BaseChat:
             return data_bytes, "image/jpeg"
         return data_bytes, "image/png"
 
-    def describe_image(self, image_bytes: bytes, mime_type: str) -> str:
+    def describe_image(
+        self,
+        image_bytes: bytes,
+        mime_type: str,
+        force_language: Optional[str] = None,
+    ) -> str:
         """
         Use Gemini 1.5 Flash to generate a detailed description of an image file.
         This allows non-multimodal vision models (like Perplexity or DeepSeek) to analyze image content.
@@ -2990,12 +3065,9 @@ class BaseChat:
                 except Exception as compress_err:
                     logger.warning(f"describe_image compress failed: {compress_err}")
             image_part = types.Part.from_bytes(data=scaled_bytes, mime_type=valid_mime)
+            _, desc_lang = resolve_reply_language(force_language)
             prompt_part = types.Part.from_text(
-                text=(
-                    "Analyze this image thoroughly. Write a detailed, natural, narrative description of everything you see: "
-                    "objects, people, colors, text on screen (transcribe any text perfectly), layout, mood, and any other relevant details. "
-                    "Do NOT use the words 'transcription', 'transcript', or 'description'. Write it as flowing prose as if you are directly observing it."
-                )
+                text=multimodal_describe_prompt(desc_lang, media="image")
             )
 
             response = client.models.generate_content(

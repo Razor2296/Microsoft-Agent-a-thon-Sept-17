@@ -61,7 +61,7 @@ Not a chatbot skin on a single prompt. A **desktop agent** with a finite-state v
 
 ### Usability — how usable is the agent?
 
-Install on Windows, talk or type, drop a PDF, get a card + overlay, ask in Spanish or English. No “paste this curl.” The agent asks less; it **does** extract → remember → answer → export.
+Install on Windows, talk or type, drop a PDF, get a card + overlay, ask in Spanish or English. No “paste this curl.” The agent asks less; it **does** extract → remember → answer → export. Every LLM provider molds to the same app prompting contract (sticky conversation language + multimodal captions — see [docs/IGNITE_CHAT.md](docs/IGNITE_CHAT.md) § Shared provider prompting contract).
 
 ### Impact — quantitative and qualitative
 

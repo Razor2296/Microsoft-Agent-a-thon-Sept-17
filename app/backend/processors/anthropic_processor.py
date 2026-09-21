@@ -64,6 +64,10 @@ from backend.processors.base_processor import (
     should_send_native_pdf,
     gemini_http_timeout_ms,
     llm_http_timeout_seconds,
+    append_mandatory_reply_language,
+    wrap_user_query_for_language,
+    multimodal_describe_prompt,
+    mandatory_reply_language_note,
 )
 
 # Logger for Anthropic
@@ -416,18 +420,9 @@ class AnthropicChat(BaseChat):
                             f"[System Note: Real-time web search results for the user's query:\n{search_results}\n\nCRITICAL INSTRUCTION: Answer the user directly using the facts above. DO NOT hallucinate any facts not present in the search results. DO NOT offer to check or search for more information, as the search was already performed. DO NOT use phrases like 'I don't have live access', 'I cannot browse the web', 'Based on the search results', or 'As of my last update'. Present the facts confidently as your own knowledge.]"
                         )
 
-        target_lang, lang_name = resolve_reply_language(
-            force_language, user_input=user_query, history=history
+        target_lang, lang_name = append_mandatory_reply_language(
+            system_notes, force_language, user_input=user_query, history=history
         )
-        is_spanish = target_lang.lower().startswith("es")
-        if is_spanish:
-            system_notes.append(
-                "[INSTRUCCIÓN MANDATORIA DE IDIOMA] ¡DEBES RESPONDER ÚNICAMENTE EN ESPAÑOL! El usuario se comunica en español (incluso si usa jerga, modismos o faltas de ortografía como 'shampions'). Ignora el idioma italiano, inglés u otro idioma de cualquier resultado de búsqueda o fuente web. TODA tu respuesta DEBE estar 100% escrita en Español a menos que el usuario solicite explícitamente cambiar de idioma."
-            )
-        else:
-            system_notes.append(
-                f"[MANDATORY LANGUAGE INSTRUCTION] You MUST reply ONLY in {lang_name}! Ignore the language of any web search results or scraped context. Reply entirely in {lang_name} UNLESS the user explicitly requests to switch to a different language."
-            )
 
         if system_notes:
             sys_instr += "\n\n" + "\n\n".join(system_notes)
@@ -447,15 +442,7 @@ class AnthropicChat(BaseChat):
             parts.append(scraped_content)
 
         if parts:
-            if force_language:
-                lang_name = resolve_lang_name(force_language)
-                is_spanish = force_language.startswith("es")
-                if is_spanish:
-                    parts.append(f"[Consulta del Usuario (Responde enteramente en ESPAÑOL)]:\n{user_query}")
-                else:
-                    parts.append(f"[User Query (Reply entirely in {lang_name})]:\n{user_query}")
-            else:
-                parts.append(f"[User Query]:\n{user_query}")
+            parts.append(wrap_user_query_for_language(user_query, target_lang, lang_name))
             user_input = "\n\n".join(parts)
         else:
             user_input = user_query
@@ -609,17 +596,9 @@ class AnthropicChat(BaseChat):
                             f"[System Note: Real-time web search results for the user's query:\n{search_results}\n\nCRITICAL INSTRUCTION: Answer the user directly using the facts above. DO NOT hallucinate any facts not present in the search results. DO NOT offer to check or search for more information, as the search was already performed. DO NOT use phrases like 'I don't have live access', 'I cannot browse the web', 'Based on the search results', or 'As of my last update'. Present the facts confidently as your own knowledge.]"
                         )
 
-        if force_language:
-            lang_name = resolve_lang_name(force_language)
-            is_spanish = force_language.startswith("es")
-            if is_spanish:
-                system_notes.append(
-                    "[Nota del Sistema: El usuario acaba de hablar/escribir en Español. Responde enteramente en Español a menos que el usuario solicite explícitamente cambiar de idioma.]"
-                )
-            else:
-                system_notes.append(
-                    f"[System Note: The user just spoke/wrote in {lang_name}. Reply in {lang_name} UNLESS the user explicitly requests to switch to a different language.]"
-                )
+        target_lang, lang_name = append_mandatory_reply_language(
+            system_notes, force_language, user_input=user_query, history=history
+        )
 
         if system_notes:
             sys_instr += "\n\n" + "\n\n".join(system_notes)
@@ -895,15 +874,7 @@ class AnthropicChat(BaseChat):
             parts.append("\n\n".join(file_contexts))
 
         if parts:
-            if force_language:
-                lang_name = resolve_lang_name(force_language)
-                is_spanish = force_language.startswith("es")
-                if is_spanish:
-                    parts.append(f"[Consulta del Usuario (Responde enteramente en ESPAÑOL)]:\n{user_query}")
-                else:
-                    parts.append(f"[User Query (Reply entirely in {lang_name})]:\n{user_query}")
-            else:
-                parts.append(f"[User Query]:\n{user_query}")
+            parts.append(wrap_user_query_for_language(user_query, target_lang, lang_name))
             user_input = "\n\n".join(parts)
         else:
             user_input = user_query

@@ -1,0 +1,11 @@
+---
+description: Never invent git branches — all work on Develop
+alwaysApply: true
+---
+
+# Git branches (hard rule)
+
+- Do **not** create new branches (`fix/…`, `ci/…`, `feat/…`, `cursor/…`, etc.).
+- Put every change, commit, and PR on **`Develop`**.
+- Use another branch **only** if the user explicitly asks for it in the message.
+- Prefer updating skills that already document this over inventing a one-off workflow.

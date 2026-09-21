@@ -54,6 +54,10 @@ from backend.processors.base_processor import (
     resolve_lang_name,
     should_send_native_pdf,
     gemini_http_timeout_ms,
+    append_mandatory_reply_language,
+    wrap_user_query_for_language,
+    multimodal_describe_prompt,
+    mandatory_reply_language_note,
 )
 
 # Logger for Gemini
@@ -660,28 +664,16 @@ class GeminiChat(BaseChat):
                 logger.info(f"Gemini native Google Search tool enabled for query: {user_query}")
 
             system_notes = []
-            if force_language:
-                lang_name = resolve_lang_name(force_language)
-                is_spanish = force_language.startswith("es")
-                if "es" in force_language.lower():
-                    system_notes.append(f"[Nota del Sistema: El usuario acaba de hablar/escribir en Español. Responde enteramente en Español a menos que el usuario solicite explícitamente cambiar de idioma.]")
-                else:
-                    system_notes.append(f"[System Note: The user just spoke/wrote in {lang_name}. Reply in {lang_name} UNLESS the user explicitly requests to switch to a different language.]")
+            target_lang, lang_name = append_mandatory_reply_language(
+                system_notes, force_language, user_input=user_query, history=history
+            )
 
             parts = []
             if scraped_content:
                 parts.append(scraped_content)
 
             if parts:
-                if force_language:
-                    lang_name = resolve_lang_name(force_language)
-                    is_spanish = force_language.startswith("es")
-                    if is_spanish:
-                        parts.append(f"[Consulta del Usuario (Responde enteramente en ESPAÑOL)]:\n{user_query}")
-                    else:
-                        parts.append(f"[User Query (Reply entirely in {lang_name})]:\n{user_query}")
-                else:
-                    parts.append(f"[User Query]:\n{user_query}")
+                parts.append(wrap_user_query_for_language(user_query, target_lang, lang_name))
                 user_input = "\n\n".join(parts)
             else:
                 user_input = user_query
@@ -778,28 +770,16 @@ class GeminiChat(BaseChat):
                 scraped_content = user_input[len(user_query):].strip()
 
             system_notes = []
-            if force_language:
-                lang_name = resolve_lang_name(force_language)
-                is_spanish = force_language.startswith("es")
-                if is_spanish:
-                    system_notes.append(f"[Nota del Sistema: El usuario acaba de hablar/escribir en Español. Responde enteramente en Español a menos que el usuario solicite explícitamente cambiar de idioma.]")
-                else:
-                    system_notes.append(f"[System Note: The user just spoke/wrote in {lang_name}. Reply in {lang_name} UNLESS the user explicitly requests to switch to a different language.]")
+            target_lang, lang_name = append_mandatory_reply_language(
+                system_notes, force_language, user_input=user_query, history=history
+            )
 
             parts = []
             if scraped_content:
                 parts.append(scraped_content)
 
             if parts:
-                if force_language:
-                    lang_name = resolve_lang_name(force_language)
-                    is_spanish = force_language.startswith("es")
-                    if is_spanish:
-                        parts.append(f"[Consulta del Usuario (Responde enteramente en ESPAÑOL)]:\n{user_query}")
-                    else:
-                        parts.append(f"[User Query (Reply entirely in {lang_name})]:\n{user_query}")
-                else:
-                    parts.append(f"[User Query]:\n{user_query}")
+                parts.append(wrap_user_query_for_language(user_query, target_lang, lang_name))
                 user_input = "\n\n".join(parts)
             else:
                 user_input = user_query

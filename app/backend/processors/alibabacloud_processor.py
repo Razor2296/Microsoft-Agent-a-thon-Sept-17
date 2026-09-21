@@ -53,6 +53,10 @@ from backend.processors.base_processor import (
     resolve_lang_name,
     gemini_http_timeout_ms,
     llm_http_timeout_seconds,
+    append_mandatory_reply_language,
+    wrap_user_query_for_language,
+    multimodal_describe_prompt,
+    mandatory_reply_language_note,
 )
 
 # Logger for Alibaba Cloud
@@ -310,17 +314,9 @@ class AlibabaCloudChat(BaseChat):
                             f"[System Note: Real-time web search results for the user's query:\n{search_results}\n\nCRITICAL INSTRUCTION: Answer the user directly using the facts above. DO NOT hallucinate. Present the facts confidently.]"
                         )
 
-        if force_language:
-            lang_name = resolve_lang_name(force_language)
-            is_spanish = force_language.startswith("es")
-            if is_spanish:
-                system_notes.append(
-                    "[Nota del Sistema: El usuario acaba de hablar/escribir en Español. Responde enteramente en Español a menos que el usuario solicite explícitamente cambiar de idioma.]"
-                )
-            else:
-                system_notes.append(
-                    f"[System Note: The user just spoke/wrote in {lang_name}. Reply in {lang_name} UNLESS the user explicitly requests to switch to a different language.]"
-                )
+        target_lang, lang_name = append_mandatory_reply_language(
+            system_notes, force_language, user_input=user_query, history=history
+        )
 
         if system_notes:
             sys_instr += "\n\n" + "\n\n".join(system_notes)
@@ -342,15 +338,7 @@ class AlibabaCloudChat(BaseChat):
             parts.append(scraped_content)
 
         if parts:
-            if force_language:
-                lang_name = resolve_lang_name(force_language)
-                is_spanish = force_language.startswith("es")
-                if is_spanish:
-                    parts.append(f"[Consulta del Usuario (Responde enteramente en ESPAÑOL)]:\n{user_query}")
-                else:
-                    parts.append(f"[User Query (Reply entirely in {lang_name})]:\n{user_query}")
-            else:
-                parts.append(f"[User Query]:\n{user_query}")
+            parts.append(wrap_user_query_for_language(user_query, target_lang, lang_name))
             user_payload = "\n\n".join(parts)
         else:
             user_payload = user_query
@@ -500,17 +488,9 @@ class AlibabaCloudChat(BaseChat):
                             f"[System Note: Real-time web search results:\n{search_results}\n\nCRITICAL INSTRUCTION: Answer the user directly using the facts above. DO NOT hallucinate.]"
                         )
 
-        if force_language:
-            lang_name = resolve_lang_name(force_language)
-            is_spanish = force_language.startswith("es")
-            if is_spanish:
-                system_notes.append(
-                    "[Nota del Sistema: El usuario acaba de hablar/escribir en Español. Responde enteramente en Español a menos que el usuario solicite explícitamente cambiar de idioma.]"
-                )
-            else:
-                system_notes.append(
-                    f"[System Note: The user just spoke/wrote in {lang_name}. Reply in {lang_name} UNLESS the user explicitly requests to switch to a different language.]"
-                )
+        target_lang, lang_name = append_mandatory_reply_language(
+            system_notes, force_language, user_input=user_query, history=history
+        )
 
         if system_notes:
             sys_instr += "\n\n" + "\n\n".join(system_notes)
@@ -571,7 +551,7 @@ class AlibabaCloudChat(BaseChat):
                                 data=scaled_bytes, mime_type=valid_mime
                             )
                             prompt_part = genai_types.Part.from_text(
-                                text="Analyze this image thoroughly. Write a detailed, natural, first-person narrative description of everything you see: objects, people, colors, text on screen, layout, mood, and any other relevant details. Do NOT use the words 'transcription', 'transcript', or 'description'. Write it as flowing prose as if you are directly observing it."
+                                text=multimodal_describe_prompt(lang_name, media="image")
                             )
 
                             vision_resp = self.client.models.generate_content(
@@ -753,15 +733,7 @@ class AlibabaCloudChat(BaseChat):
             parts.append("\n\n".join(file_contexts))
 
         if parts:
-            if force_language:
-                lang_name = resolve_lang_name(force_language)
-                is_spanish = force_language.startswith("es")
-                if is_spanish:
-                    parts.append(f"[Consulta del Usuario (Responde enteramente en ESPAÑOL)]:\n{user_query}")
-                else:
-                    parts.append(f"[User Query (Reply entirely in {lang_name})]:\n{user_query}")
-            else:
-                parts.append(f"[User Query]:\n{user_query}")
+            parts.append(wrap_user_query_for_language(user_query, target_lang, lang_name))
             user_payload = "\n\n".join(parts)
         else:
             user_payload = user_query

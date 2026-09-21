@@ -68,6 +68,7 @@ graph TD
 
 ### 1. ⚡ Dynamic Real-Time Web Search & Token Optimization
 * **System Prompt Tool Guidelines (`inject_tool_use_guidelines`)**: Delegates search invocation to LLM reasoning via structured prompt instructions rather than fragile keyword matching. Casual talk, math, and code generation consume **0 search tokens**.
+* **Shared provider prompting contract (all LLMs mold to the app):** Every UI provider (Gemini, DeepSeek, OpenAI, Anthropic, Perplexity, Grok; Alibaba backend) uses the same helpers in `app/backend/processors/base_processor.py` — `append_mandatory_reply_language` / `resolve_reply_language`, `wrap_user_query_for_language`, and `multimodal_describe_prompt`. Sticky conversation language, vision/video captions, and even privacy/safety refusals follow the user’s language. Forbidden: provider-specific soft notes or English-only Gemini describe prompts that break Spanish (or other) threads.
 * **Grounding Context Truncation**: Truncates search worker context history, reducing search grounding tokens by **over 95%** (from 5,000+ tokens to ~200-300 tokens per search).
 * **Tenant-Scoped 403 HTTP Handling**: Detects restricted search endpoints (such as Google Custom Search 403) and disables Custom Search **only for that tenant/session namespace** (`_SEARCH_DISABLED_BY_TENANT`), not for every user on the replica.
 * **User Local Timezone & Recency Filtering**: Embeds local timezone and current calendar date dynamically to steer search grounding toward real-time news articles, discarding outdated forum threads.

@@ -33,6 +33,10 @@ from backend.processors.base_processor import (
     get_user_country_code,
     gemini_http_timeout_ms,
     llm_http_timeout_seconds,
+    append_mandatory_reply_language,
+    wrap_user_query_for_language,
+    multimodal_describe_prompt,
+    mandatory_reply_language_note,
 )
 from backend.core.schemas import TokenInfo
 from backend.integrations.document_request import CRITICAL_DOCUMENT_ANALYSIS_RULE
@@ -268,14 +272,9 @@ class GrokChat(BaseChat):
             else:
                 sys_instr += f"\n\n[REAL-TIME SEARCH GROUNDING CONTEXT]\n{search_results_text}\n\nUse the search results above as your factual source for recent and current events. Do not mention that you performed a Google Search unless asked."
 
-        target_lang, lang_name = resolve_reply_language(
-            force_language, user_input=user_query, history=history
+        target_lang, lang_name = append_mandatory_reply_language(
+            system_notes, force_language, user_input=user_query, history=history
         )
-        is_spanish = target_lang.lower().startswith("es")
-        if is_spanish:
-            system_notes.append("[INSTRUCCIÓN MANDATORIA DE IDIOMA] ¡DEBES RESPONDER ÚNICAMENTE EN ESPAÑOL! El usuario se comunica en español (incluso si usa jerga, modismos o faltas de ortografía como 'shampions'). Ignora el idioma italiano, inglés u otro idioma de cualquier resultado de búsqueda o fuente web. TODA tu respuesta DEBE estar 100% escrita en Español a menos que el usuario solicite explícitamente cambiar de idioma.")
-        else:
-            system_notes.append(f"[MANDATORY LANGUAGE INSTRUCTION] You MUST reply ONLY in {lang_name}! Ignore the language of any web search results or scraped context. Reply entirely in {lang_name} UNLESS the user explicitly requests to switch to a different language.")
 
         if system_notes:
             sys_instr += "\n\n" + "\n\n".join(system_notes)
@@ -424,13 +423,9 @@ class GrokChat(BaseChat):
             else:
                 sys_instr += f"\n\n[REAL-TIME SEARCH GROUNDING CONTEXT]\n{search_results_text}\n\nUse the search results above as your factual source for recent and current events."
 
-        if force_language:
-            lang_name = resolve_lang_name(force_language)
-            is_spanish = force_language.startswith("es")
-            if is_spanish:
-                system_notes.append(f"[Nota del Sistema: El usuario acaba de hablar/escribir en Español. Responde enteramente en Español a menos que el usuario solicite explícitamente cambiar de idioma.]")
-            else:
-                system_notes.append(f"[System Note: The user just spoke/wrote in {lang_name}. Reply in {lang_name} UNLESS the user explicitly requests to switch to a different language.]")
+        target_lang, lang_name = append_mandatory_reply_language(
+            system_notes, force_language, user_input=user_query, history=history
+        )
 
         if system_notes:
             sys_instr += "\n\n" + "\n\n".join(system_notes)

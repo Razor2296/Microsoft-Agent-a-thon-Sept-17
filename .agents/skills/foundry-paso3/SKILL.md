@@ -15,6 +15,7 @@ Trabajo bajo `_agentathon/` (o clone de ese repo). Nada más.
 
 ## PROHIBIDO — no negociable
 
+- **Git / ramas:** ❌ Nunca inventar ramas (`fix/…`, `ci/…`, `cursor/…`). ✅ Commits y PRs solo en **`Develop`** (otra rama solo con pedido explícito del usuario).
 - **NO TOCAR Ignite API** (`Razor2296/IgniteAPI`: remote, PRs, server extract, ACA).
 - **NO TOCAR Ignite Chat** (`Razor2296/IgniteChat`: remote, PRs, UI producto).
 - Snapshot `app/` en Agent-a-thon = **copia de concurso**; no empujar Foundry a remotes de producto.
