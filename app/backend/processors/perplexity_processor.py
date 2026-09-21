@@ -30,6 +30,10 @@ from backend.processors.base_processor import (
     get_user_country_code,
     gemini_http_timeout_ms,
     llm_http_timeout_seconds,
+    append_mandatory_reply_language,
+    wrap_user_query_for_language,
+    multimodal_describe_prompt,
+    mandatory_reply_language_note,
 )
 from backend.core.schemas import TokenInfo
 from backend.integrations.document_request import CRITICAL_DOCUMENT_ANALYSIS_RULE
@@ -350,13 +354,9 @@ class PerplexityChat(BaseChat):
                     else:
                         system_notes.append(f"[System Note: Real-time web search results provided by the SYSTEM for your knowledge:\n{search_results}\n\nCRITICAL INSTRUCTION: Answer the user directly using the facts above. NEVER say 'in the results you shared' or 'according to the data you provided' (these results were retrieved by the SYSTEM, not the user). DO NOT include bracketed citation numbers like [1] or [12]. Present the facts confidently directly as your own knowledge.]")
 
-        if force_language:
-            lang_name = resolve_lang_name(force_language)
-            is_spanish = force_language.startswith("es")
-            if is_spanish:
-                system_notes.append(f"[Nota del Sistema: El usuario acaba de hablar/escribir en Español. Responde enteramente en Español a menos que el usuario solicite explícitamente cambiar de idioma.]")
-            else:
-                system_notes.append(f"[System Note: The user just spoke/wrote in {lang_name}. Reply in {lang_name} UNLESS the user explicitly requests to switch to a different language.]")
+        target_lang, lang_name = append_mandatory_reply_language(
+            system_notes, force_language, user_input=user_query, history=history
+        )
 
         if system_notes:
             sys_instr += "\n\n" + "\n\n".join(system_notes)
@@ -376,15 +376,7 @@ class PerplexityChat(BaseChat):
             parts.append(scraped_content)
 
         if parts:
-            if force_language:
-                lang_name = resolve_lang_name(force_language)
-                is_spanish = force_language.startswith("es")
-                if is_spanish:
-                    parts.append(f"[Consulta del Usuario (Responde enteramente en ESPAÑOL)]:\n{user_query}")
-                else:
-                    parts.append(f"[User Query (Reply entirely in {lang_name})]:\n{user_query}")
-            else:
-                parts.append(f"[User Query]:\n{user_query}")
+            parts.append(wrap_user_query_for_language(user_query, target_lang, lang_name))
             user_input = "\n\n".join(parts)
         else:
             user_input = user_query
@@ -548,13 +540,9 @@ class PerplexityChat(BaseChat):
                     else:
                         system_notes.append(f"[System Note: Real-time web search results provided by the SYSTEM for your knowledge:\n{search_results}\n\nCRITICAL INSTRUCTION: Answer the user directly using the facts above. NEVER say 'in the results you shared' or 'according to the data you provided' (these results were retrieved by the SYSTEM, not the user). DO NOT include bracketed citation numbers like [1] or [12]. Present the facts confidently directly as your own knowledge.]")
 
-        if force_language:
-            lang_name = resolve_lang_name(force_language)
-            is_spanish = force_language.startswith("es")
-            if is_spanish:
-                system_notes.append(f"[Nota del Sistema: El usuario acaba de hablar/escribir en Español. Responde enteramente en Español a menos que el usuario solicite explícitamente cambiar de idioma.]")
-            else:
-                system_notes.append(f"[System Note: The user just spoke/wrote in {lang_name}. Reply in {lang_name} UNLESS the user explicitly requests to switch to a different language.]")
+        target_lang, lang_name = append_mandatory_reply_language(
+            system_notes, force_language, user_input=user_query, history=history
+        )
 
         if system_notes:
             sys_instr += "\n\n" + "\n\n".join(system_notes)
@@ -655,15 +643,7 @@ class PerplexityChat(BaseChat):
             parts.append("\n\n".join(file_contexts))
 
         if parts:
-            if force_language:
-                lang_name = resolve_lang_name(force_language)
-                is_spanish = force_language.startswith("es")
-                if is_spanish:
-                    parts.append(f"[Consulta del Usuario (Responde enteramente en ESPAÑOL)]:\n{user_query}")
-                else:
-                    parts.append(f"[User Query (Reply entirely in {lang_name})]:\n{user_query}")
-            else:
-                parts.append(f"[User Query]:\n{user_query}")
+            parts.append(wrap_user_query_for_language(user_query, target_lang, lang_name))
             user_input = "\n\n".join(parts)
         else:
             user_input = user_query
