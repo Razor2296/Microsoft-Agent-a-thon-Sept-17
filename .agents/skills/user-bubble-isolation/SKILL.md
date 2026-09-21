@@ -9,8 +9,10 @@ La burbuja **YOU** solo puede mostrar:
 
 1. Texto **escrito o dictado** por el usuario (STT incluido).
 2. La **card/preview** del adjunto (`wa-file-card` / imagen).
+3. El **player de voz WhatsApp** (`buildVoicePlayerHTML`) cuando el envío es mic (`Voice_Message_*` + `isVoice` / `from_mic`).
 
 Nunca debe mostrar contexto armado para el LLM.
+Nunca debe quedar vacía tras un envío de mic (solo “Tokens Consumed” + ✓✓) — eso es regresión de `refreshMessageAttachments` vs voz; ver `test_voice_bubble_refresh_guard.py`.
 
 ## Marcadores prohibidos en `role=user` content
 
