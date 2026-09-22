@@ -746,6 +746,47 @@ def _rehydrate_media_paths(messages: list) -> list:
 
 
 # Function to clean the history for saving to file (preserves full content for history context)
+def strip_model_context_from_user_content(content: str) -> str:
+    """Keep only user-authored text in chat bubbles.
+
+    RAG recall and multimodal file assemblies are model-facing only
+    (skill: System Prompt Isolation). Never show them in the user bubble.
+    """
+    if not isinstance(content, str) or not content:
+        return content or ""
+    text = content
+    if "[LOCAL PERSISTENT MEMORY RECALLED]" in text:
+        if "[USER QUERY]" in text:
+            text = text.split("[USER QUERY]", 1)[-1].strip()
+        else:
+            text = ""
+    text = re.sub(
+        r"^\[(?:Consulta del Usuario|User Query)[^\]]*\]:\s*",
+        "",
+        text,
+        count=1,
+        flags=re.IGNORECASE,
+    )
+    for marker in (
+        "<image_file",
+        "<video_file",
+        "<audio_recording",
+        '<file name=',
+        "[What I can see in this image:]",
+        "[What I can see and hear in this video:]",
+        "[Content of ",
+        "[System Note:",
+        "[Audio Metadata:]",
+        "[Lyrics / Spoken Words:]",
+        "[REAL-TIME SEARCH GROUNDING CONTEXT]",
+    ):
+        idx = text.find(marker)
+        if idx >= 0:
+            text = text[:idx].strip()
+            break
+    return text.strip()
+
+
 def _clean_history_for_saving(
     history,
     provider: str | None = None,
@@ -755,6 +796,8 @@ def _clean_history_for_saving(
     clean_hist = []
     for msg in history:
         msg_copy = dict(msg)
+        if msg_copy.get("role") == "user":
+            msg_copy["content"] = strip_model_context_from_user_content(msg_copy.get("content") or "")
         if "token_info" in msg_copy and msg_copy["token_info"] is not None:
             t_info = msg_copy["token_info"]
             if hasattr(t_info, "to_legacy_dict"):
@@ -810,6 +853,8 @@ def _clean_history_for_frontend(history):
     clean_hist = []
     for msg in history:
         msg_copy = dict(msg)
+        if msg_copy.get("role") == "user":
+            msg_copy["content"] = strip_model_context_from_user_content(msg_copy.get("content") or "")
         if "token_info" in msg_copy and msg_copy["token_info"] is not None:
             t_info = msg_copy["token_info"]
             if hasattr(t_info, "to_legacy_dict"):
@@ -4197,9 +4242,9 @@ class PyWebViewApi:
                     max_tokens=max_tokens
                 )
                 if isinstance(res, tuple) and len(res) == 3:
-                    reply, token_info, enriched_text = res
-                    if self._history[provider] and self._history[provider][-1]["role"] == "user":
-                        self._history[provider][-1]["content"] = enriched_text
+                    # Third value is model-facing assembly (RAG / file contexts). Never
+                    # write it into the user bubble — keep preprocess `text` only.
+                    reply, token_info, _model_facing_user_text = res
                 else:
                     reply, token_info = res
             else:

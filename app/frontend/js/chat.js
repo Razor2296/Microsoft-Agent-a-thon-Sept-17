@@ -358,7 +358,9 @@ function buildMessageAttachmentsHTML(extra, contentHtml) {
     return contentHtml;
 }
 
-/** Refresh attachment cards on a live user bubble after async PDF thumbnail hydrate. */
+/** Refresh attachment cards on a live user bubble after async PDF thumbnail hydrate.
+ *  MUST preserve WhatsApp voice player: buildMessageAttachmentsHTML filters out
+ *  Voice_Message_* — rebuilding with text-only HTML empties mic bubbles. */
 window.refreshMessageAttachments = function(msgId, files, content) {
     try {
         const wrapper = document.querySelector(`[data-msg-id="${CSS.escape(msgId)}"]`);
@@ -366,6 +368,22 @@ window.refreshMessageAttachments = function(msgId, files, content) {
         const contentEl = wrapper.querySelector('.message-content');
         if (!contentEl) return;
         const raw = content != null ? content : (wrapper.dataset.rawContent || '');
+        const fileList = files || [];
+        const isVoice =
+            wrapper.dataset.isVoice === '1' ||
+            fileList.some((f) => (f.name || '').startsWith('Voice_Message_'));
+
+        // Voice-only: player already rendered in appendMessage — do not rebuild.
+        if (isVoice) {
+            const hasNonVoice = fileList.some(
+                (f) => !(f.name || '').startsWith('Voice_Message_')
+            );
+            if (!hasNonVoice) return;
+            let voiceHtml = buildVoicePlayerHTML({ files: fileList }, raw);
+            contentEl.innerHTML = buildMessageAttachmentsHTML({ files: fileList }, voiceHtml);
+            return;
+        }
+
         let textHtml = raw;
         try {
             if (typeof marked !== 'undefined' && marked.parse) {
@@ -376,7 +394,7 @@ window.refreshMessageAttachments = function(msgId, files, content) {
         } catch (parseErr) {
             textHtml = raw.replace(/\n/g, '<br>');
         }
-        contentEl.innerHTML = buildMessageAttachmentsHTML({ files: files || [] }, textHtml);
+        contentEl.innerHTML = buildMessageAttachmentsHTML({ files: fileList }, textHtml);
     } catch (err) {
         console.warn('refreshMessageAttachments failed:', err);
     }
@@ -438,6 +456,9 @@ function appendMessage(role, content, tokenInfo = null, timestamp = null, addChe
         const wrapperDiv = document.createElement('div');
         wrapperDiv.className = `message-wrapper ${role}`;
         wrapperDiv.dataset.rawContent = content;
+        if (isVoice) {
+            wrapperDiv.dataset.isVoice = '1';
+        }
 
         let msgTs = Date.now();
         if (extra && extra.iso_timestamp) {

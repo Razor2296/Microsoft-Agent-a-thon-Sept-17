@@ -224,7 +224,13 @@ async function sendMessage() {
                         console.warn('Attachment preview hydrate failed:', hydrateErr);
                     }
                 }
-                if (typeof window.refreshMessageAttachments === 'function') {
+                // Voice-only bubbles already have buildVoicePlayerHTML — skip refresh
+                // (refresh used to wipe the player by filtering Voice_Message_* out).
+                const needsAttachmentRefresh = hydrated.some((f) => {
+                    const name = f.name || '';
+                    return !name.startsWith('Voice_Message_');
+                });
+                if (needsAttachmentRefresh && typeof window.refreshMessageAttachments === 'function') {
                     window.refreshMessageAttachments(msgId, buildFilesForUi(hydrated), text);
                 }
             })();
