@@ -21,6 +21,8 @@ Rules: https://aka.ms/AgentathonRules
 | Extraction reference | https://github.com/Razor2296/IgniteAPI (not edited for this submission) |
 | Architecture | README + `docs/architecture.drawio` + PASO3 diagrams |
 | Demo video ≤ 3 min | problem → Plan JSON / Workflow → Tracing → Evals |
+| Pre-record checklist | [`.agents/skills/foundry-paso3/references/DEMO_VIDEO_CHECKLIST.md`](../.agents/skills/foundry-paso3/references/DEMO_VIDEO_CHECKLIST.md) |
+| Demo scripts | [GUION_DEMO_AGENTATHON.md](GUION_DEMO_AGENTATHON.md), [PRESENTACION_Y_GUION_DEMO.md](PRESENTACION_Y_GUION_DEMO.md) |
 | Founderz form | category, description, repo URL, diagram, video |
 
 ## Foundry brain (Architect checkboxes)

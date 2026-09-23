@@ -58,6 +58,25 @@ class TestBrain(unittest.TestCase):
         result = run_turn("Hola", lang="es", use_foundry=False)
         self.assertEqual(result["plan"]["intent"], "CLARIFY")
 
+    def test_generate_image_plan(self):
+        result = run_turn("Genera una imagen de un gato", lang="es", use_foundry=False)
+        self.assertEqual(result["plan"]["intent"], "GENERATE_IMAGE")
+        self.assertEqual(result["plan"]["modality"], "image")
+        self.assertEqual(result["plan"]["steps"][0]["agent"], "ignite-image-agent")
+        self.assertIn("intent:GENERATE_IMAGE", result["trace_tags"])
+
+    def test_generate_audio_plan(self):
+        result = run_turn("Crea un sonido de lluvia", lang="es", use_foundry=False)
+        self.assertEqual(result["plan"]["intent"], "GENERATE_AUDIO")
+        self.assertEqual(result["plan"]["modality"], "audio")
+        self.assertEqual(result["plan"]["steps"][0]["agent"], "ignite-audio-agent")
+
+    def test_generate_image_not_confused_with_describe(self):
+        """'Genera una imagen' must not route to MEDIA_DESCRIBE / MED-IMG fixtures."""
+        plan = heuristic_plan("Genera una imagen de un atardecer")
+        self.assertEqual(plan["intent"], "GENERATE_IMAGE")
+        self.assertNotEqual(plan["intent"], "MEDIA_DESCRIBE")
+
     def test_detect_modality(self):
         self.assertEqual(detect_modality("ver el video MED-VID-001"), "video")
         self.assertEqual(detect_modality("extrae DOC-003"), "document")

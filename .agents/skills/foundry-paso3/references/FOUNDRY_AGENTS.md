@@ -36,7 +36,9 @@ Ver también la cola de casos: [STD_CASE_QUEUE.md](STD_CASE_QUEUE.md).
 1. Un turno en el Chat **snapshot** arma Traces.
 2. Eso **dispara** el workflow multiagente (misma conversación / sesión).
 3. La “historia” del turno = spans en Traces + Plan footer en la burbuja.
-4. **Más adelante** (NO ahora): persistir esa historia JSON en Cosmos DB, Postgres JSONB, u otra BD JSON. Dejar en paz hasta pedido explícito.
+4. **Mic / nota de voz (STD-012):** `from_mic=True` o `Voice_Message_*` → trigger `chat_mic` (aunque el STT ya haya quitado el webm de `files`). Chat casual: traza y deja el reply del provider; extract hablado: footer Foundry.
+5. **Generación imagen/audio (STD-014):** `GENERATE_IMAGE` → `ignite-image-agent`; `GENERATE_AUDIO` → `ignite-audio-agent`. Foundry planifica y deja Traces; Ignite Chat genera los bytes.
+6. **Más adelante** (NO ahora): persistir esa historia JSON en Cosmos DB, Postgres JSONB, u otra BD JSON. Dejar en paz hasta pedido explícito.
 
 ## Env
 

@@ -41,6 +41,31 @@ MEDIA_AGENT = IMAGE_AGENT
 
 _DOC_ID_RE = re.compile(r"\bDOC-\d{3}\b", re.IGNORECASE)
 _MEDIA_ID_RE = re.compile(r"\bMED-(?:IMG|AUD|VID)-\d{3}\b", re.IGNORECASE)
+_GEN_IMAGE_RE = re.compile(
+    r"(genera|generar|crea|crear|dibuja|dibujar|haz|hacer|generate|create|draw|make|paint)"
+    r".{0,48}(imagen|image|foto|picture|drawing|photo|ilustraci|illustration|pintura|painting)",
+    re.IGNORECASE,
+)
+_GEN_AUDIO_RE = re.compile(
+    r"(genera|generar|crea|crear|generate|create|make)"
+    r".{0,48}(audio|sonido|sound|m[uú]sica|music|efecto de sonido|sound effect)",
+    re.IGNORECASE,
+)
+
+
+def detect_generate_kind(user_text: str) -> str | None:
+    """Return 'image' | 'audio' when the user asks Ignite Chat to *create* media."""
+    t = user_text or ""
+    # Ignore mic channel tags injected for Traces.
+    if "from_mic=true" in t.lower() and "Voice_Message" in t:
+        body = t.split("[channel=")[0]
+    else:
+        body = t
+    if _GEN_IMAGE_RE.search(body):
+        return "image"
+    if _GEN_AUDIO_RE.search(body):
+        return "audio"
+    return None
 
 
 def detect_modality(user_text: str) -> str:
@@ -71,6 +96,48 @@ def heuristic_plan(user_text: str) -> dict[str, Any]:
     """Deterministic brain used offline and as fallback when Foundry JSON is invalid."""
     text = user_text or ""
     lower = text.lower()
+    gen_kind = detect_generate_kind(text)
+    if gen_kind == "image":
+        return validate_plan(
+            empty_plan(
+                modality="image",
+                intent="GENERATE_IMAGE",
+                steps=[
+                    {"action": "generate_image", "agent": IMAGE_AGENT, "args": {}},
+                    {"action": "synthesize", "agent": ORCHESTRATOR_AGENT, "args": {}},
+                ],
+                user_message_es=(
+                    "Plan GENERATE_IMAGE listo — Ignite Chat genera los bytes (Imagen/OpenAI); "
+                    "Foundry rastreó el workflow con ignite-image-agent."
+                ),
+                user_message_en=(
+                    "GENERATE_IMAGE plan ready — Ignite Chat emits image bytes; "
+                    "Foundry traced the workflow via ignite-image-agent."
+                ),
+                trace_tags=["modality:image", "intent:GENERATE_IMAGE"],
+            )
+        )
+    if gen_kind == "audio":
+        return validate_plan(
+            empty_plan(
+                modality="audio",
+                intent="GENERATE_AUDIO",
+                steps=[
+                    {"action": "generate_audio", "agent": AUDIO_AGENT, "args": {}},
+                    {"action": "synthesize", "agent": ORCHESTRATOR_AGENT, "args": {}},
+                ],
+                user_message_es=(
+                    "Plan GENERATE_AUDIO listo — Ignite Chat genera el audio; "
+                    "Foundry rastreó el workflow con ignite-audio-agent."
+                ),
+                user_message_en=(
+                    "GENERATE_AUDIO plan ready — Ignite Chat emits audio bytes; "
+                    "Foundry traced the workflow via ignite-audio-agent."
+                ),
+                trace_tags=["modality:audio", "intent:GENERATE_AUDIO"],
+            )
+        )
+
     modality = detect_modality(text)
     doc_match = _DOC_ID_RE.search(text)
     media_match = _MEDIA_ID_RE.search(text)
@@ -236,6 +303,28 @@ def execute_plan(plan: dict[str, Any], *, lang: str = "es") -> dict[str, Any]:
                 "Ignite Chat would emit Office bytes; Foundry only plans."
             )
             tool_results.append({"action": action, "status": "planned"})
+
+        elif action == "generate_image":
+            final_es = (
+                "Plan GENERATE_IMAGE ejecutado en Foundry (ignite-image-agent). "
+                "Los bytes de la imagen los genera Ignite Chat."
+            )
+            final_en = (
+                "GENERATE_IMAGE plan executed in Foundry (ignite-image-agent). "
+                "Ignite Chat emits the image bytes."
+            )
+            tool_results.append({"action": action, "status": "planned", "agent": IMAGE_AGENT})
+
+        elif action == "generate_audio":
+            final_es = (
+                "Plan GENERATE_AUDIO ejecutado en Foundry (ignite-audio-agent). "
+                "Los bytes de audio los genera Ignite Chat."
+            )
+            final_en = (
+                "GENERATE_AUDIO plan executed in Foundry (ignite-audio-agent). "
+                "Ignite Chat emits the audio bytes."
+            )
+            tool_results.append({"action": action, "status": "planned", "agent": AUDIO_AGENT})
 
         elif action == "clarify":
             if not final_es:

@@ -387,7 +387,9 @@ class RemotePyWebViewApi:
     def get_cost_totals(self):
         return self._invoke("get_cost_totals")
 
-    def get_accumulated_cost_stats(self):
+    def get_accumulated_cost_stats(self, language=None):
+        if language is not None:
+            return self._invoke("get_accumulated_cost_stats", language)
         return self._invoke("get_accumulated_cost_stats")
 
     def set_provider(self, provider):

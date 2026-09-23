@@ -12,6 +12,7 @@ Trabajo bajo `_agentathon/` (o clone de ese repo). Nada más.
 
 1. [references/STD_CASE_QUEUE.md](references/STD_CASE_QUEUE.md) — **metodología STD Queue** (casos OPEN/DEFERRED)
 2. [references/FOUNDRY_AGENTS.md](references/FOUNDRY_AGENTS.md) — nombres canónicos del portal
+3. [references/DEMO_VIDEO_CHECKLIST.md](references/DEMO_VIDEO_CHECKLIST.md) — **antes de grabar** el video ≤3 min
 
 ## PROHIBIDO — no negociable
 
@@ -43,3 +44,6 @@ Create-if-missing = **STD-005**. Segregación = **STD-004**. Cosmos/Postgres = *
 6. **Modelo:** Gemini `gemini-2.5-flash` por defecto de concurso.
 7. **Logs:** `FOUNDRY ...`
 8. **Scope:** solo Agent-a-thon.
+9. **Mic / voz (STD-012):** turnos `from_mic` o `Voice_Message_*` también abren Traces (`trigger=chat_mic`). No depender de `files` tras STT.
+10. **Todo Chat → Foundry (STD-014):** generación de imagen/audio y el resto de turnos también planifican/rastrean; Chat sigue emitiendo bytes.
+11. **Video-safe:** turnos no-intercept (mic, gen, chat) trazan **async** (`FOUNDRY_TRACE_ASYNC=true` default). Extract/doc sigue **sync** para el footer en burbuja.

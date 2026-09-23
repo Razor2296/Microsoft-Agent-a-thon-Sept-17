@@ -8,7 +8,9 @@ When enabled (FOUNDRY_ORCHESTRATION_ENABLED=true OR PROJECT_CONNECTION_STRING se
   5. Mirror Plan JSON locally for the chat bubble / offline fallback
 
 Hooks:
-  - Chat turns (document/media/extract) via maybe_run_foundry_turn
+  - Every enabled Chat turn → maybe_run_foundry_turn (Traces + workflow)
+  - Mic / Voice_Message → trigger chat_mic (keep provider reply unless extract)
+  - Generate image/audio → trigger chat_generate_image|audio (Chat emits bytes; Foundry plans)
   - Chat → Ignite API extract via notify_foundry_after_extract
 
 Agent-a-thon repo only — does not modify IgniteChat / IgniteAPI remotes.
@@ -20,6 +22,7 @@ import logging
 import os
 import re
 import sys
+import threading
 from pathlib import Path
 from typing import Any
 
@@ -38,6 +41,16 @@ _EXTRACT_HINTS = (
     "pdf",
     "documento",
     "document",
+)
+_GEN_IMAGE_RE = re.compile(
+    r"(genera|generar|crea|crear|dibuja|dibujar|haz|hacer|generate|create|draw|make|paint)"
+    r".{0,48}(imagen|image|foto|picture|drawing|photo|ilustraci|illustration|pintura|painting)",
+    re.IGNORECASE,
+)
+_GEN_AUDIO_RE = re.compile(
+    r"(genera|generar|crea|crear|generate|create|make)"
+    r".{0,48}(audio|sonido|sound|m[uú]sica|music|efecto de sonido|sound effect)",
+    re.IGNORECASE,
 )
 _STATUS_LOGGED = False
 
@@ -101,16 +114,67 @@ def foundry_orchestration_enabled() -> bool:
     return enabled
 
 
-def should_handle_turn(text: str, files: list | None = None) -> bool:
-    if _truthy("FOUNDRY_ORCHESTRATION_ALWAYS"):
-        return True
-    if files:
-        return True
+def detect_generate_kind(text: str) -> str | None:
+    """'image' | 'audio' when the user asks Chat to create media (not describe)."""
+    body = (text or "").split("[channel=")[0]
+    if _GEN_IMAGE_RE.search(body):
+        return "image"
+    if _GEN_AUDIO_RE.search(body):
+        return "audio"
+    return None
+
+
+def _has_voice_attachment(files: list | None) -> bool:
+    for f in files or []:
+        if not isinstance(f, dict):
+            continue
+        name = str(f.get("name") or f.get("filename") or "")
+        mime = str(f.get("mime_type") or "").lower()
+        if name.startswith("Voice_Message_") or mime.startswith("audio/"):
+            return True
+    return False
+
+
+def _is_extract_or_doc_turn(text: str, files: list | None = None) -> bool:
+    """True for document/media *analyze* intents (not generate / plain chat / casual mic)."""
+    if detect_generate_kind(text or ""):
+        return False
+    for f in files or []:
+        if not isinstance(f, dict):
+            continue
+        name = str(f.get("name") or f.get("filename") or "")
+        mime = str(f.get("mime_type") or "").lower()
+        if name.startswith("Voice_Message_") or mime.startswith("audio/"):
+            continue
+        return True  # image / pdf / office / etc.
     blob = text or ""
     lower = blob.lower()
     if _DOC_ID_RE.search(blob) or _MEDIA_ID_RE.search(blob):
         return True
     return any(h in lower for h in _EXTRACT_HINTS)
+
+
+def should_handle_turn(
+    text: str,
+    files: list | None = None,
+    *,
+    from_mic: bool = False,
+) -> bool:
+    """Every enabled Chat turn hits Foundry (Traces + workflow).
+
+    Callers must gate on foundry_orchestration_enabled(). Generate image/audio,
+    mic, attachments, extract, and plain chat are all in scope (STD-014).
+    """
+    if _truthy("FOUNDRY_ORCHESTRATION_ALWAYS", "true"):
+        return True
+    # FOUNDRY_ORCHESTRATION_ALWAYS=false → legacy narrow filter
+    if from_mic or _has_voice_attachment(files):
+        return True
+    if detect_generate_kind(text or ""):
+        return True
+    if files:
+        return True
+    return _is_extract_or_doc_turn(text or "", files)
 
 
 def _ensure_foundry_on_path() -> None:
@@ -190,24 +254,122 @@ def run_foundry_turn(
     return run_traced_orchestration(prompt, lang=lang, trigger=trigger)
 
 
+def _trace_async_enabled() -> bool:
+    """Non-intercept turns trace in a daemon thread so Chat UX never freezes (video-safe)."""
+    return _truthy("FOUNDRY_TRACE_ASYNC", "true")
+
+
+def _spawn_foundry_trace(
+    text: str,
+    files: list | None = None,
+    *,
+    language: str | None = None,
+    trigger: str = "chat",
+) -> None:
+    def _worker() -> None:
+        try:
+            run_foundry_turn(text, files, language=language, trigger=trigger)
+        except Exception as exc:
+            logger.warning(
+                "FOUNDRY async trace failed trigger=%s err=%s", trigger, exc
+            )
+
+    threading.Thread(
+        target=_worker,
+        name=f"foundry-trace-{trigger}",
+        daemon=True,
+    ).start()
+    logger.info("FOUNDRY async trace spawned trigger=%s", trigger)
+
+
 def maybe_run_foundry_turn(
     text: str,
     files: list | None = None,
     *,
     language: str | None = None,
+    from_mic: bool = False,
 ) -> dict[str, Any] | None:
-    """Chat hook: return chat-shaped dict or None to keep normal LLM path."""
+    """Chat hook: return chat-shaped dict or None to keep normal LLM / generation path.
+
+    When orchestration is on, every turn arms Traces + workflow. Only extract /
+    document-analyze turns intercept the bubble (sync). Mic, generate image/audio,
+    and plain chat keep Ignite Chat as executor and trace **async** by default
+    (FOUNDRY_TRACE_ASYNC=true) so the video demo never freezes on Azure.
+    """
     if not foundry_orchestration_enabled():
         logger.info("FOUNDRY maybe_run_foundry_turn: skipped (orchestration disabled)")
         return None
-    if not should_handle_turn(text or "", files):
-        logger.info("FOUNDRY maybe_run_foundry_turn: skipped (turn not extract/media)")
+    voice_turn = bool(from_mic) or _has_voice_attachment(files)
+    gen_kind = detect_generate_kind(text or "")
+    if not should_handle_turn(text or "", files, from_mic=from_mic):
+        logger.info("FOUNDRY maybe_run_foundry_turn: skipped (filtered)")
         return None
-    logger.info("FOUNDRY maybe_run_foundry_turn: RUNNING (intercepts normal LLM path)")
+
+    files_for_prompt = list(files or [])
+    if voice_turn and not _has_voice_attachment(files_for_prompt):
+        files_for_prompt.append(
+            {
+                "name": "Voice_Message_mic.webm",
+                "mime_type": "audio/webm",
+            }
+        )
+
+    if voice_turn:
+        trigger = "chat_mic"
+    elif gen_kind == "image":
+        trigger = "chat_generate_image"
+    elif gen_kind == "audio":
+        trigger = "chat_generate_audio"
+    else:
+        trigger = "chat"
+
+    prompt_text = (text or "").strip()
+    if voice_turn:
+        prompt_text = (
+            f"{prompt_text}\n"
+            "[channel=audio from_mic=true modality=audio nota de voz Voice_Message]"
+        ).strip()
+    elif gen_kind == "image":
+        prompt_text = (
+            f"{prompt_text}\n"
+            "[intent=GENERATE_IMAGE modality=image agent=ignite-image-agent]"
+        ).strip()
+    elif gen_kind == "audio":
+        prompt_text = (
+            f"{prompt_text}\n"
+            "[intent=GENERATE_AUDIO modality=audio agent=ignite-audio-agent]"
+        ).strip()
+
+    will_intercept = bool(_is_extract_or_doc_turn(text or "", files) and not gen_kind)
+
+    logger.info(
+        "FOUNDRY maybe_run_foundry_turn: RUNNING trigger=%s from_mic=%s gen=%s "
+        "intercept=%s async=%s",
+        trigger,
+        from_mic,
+        gen_kind,
+        will_intercept,
+        (not will_intercept) and _trace_async_enabled(),
+    )
+
+    # Video-safe: do not block Imagen / TTS / normal chat on Azure round-trips.
+    if not will_intercept and _trace_async_enabled():
+        _spawn_foundry_trace(
+            prompt_text,
+            files_for_prompt,
+            language=language,
+            trigger=trigger,
+        )
+        return None
+
     try:
-        raw = run_foundry_turn(text, files, language=language, trigger="chat")
+        raw = run_foundry_turn(
+            prompt_text, files_for_prompt, language=language, trigger=trigger
+        )
     except Exception as exc:
         logger.exception("foundry_orchestration: chat turn failed")
+        if not will_intercept:
+            return None
         return {
             "status": "error",
             "message": f"⚠ Foundry orchestration failed: {exc}",
@@ -216,25 +378,79 @@ def maybe_run_foundry_turn(
     live = bool(raw.get("live"))
     hard_fail = bool(raw.get("error")) and not live
     logger.info(
-        "FOUNDRY maybe_run_foundry_turn: done live=%s source=%s error=%s",
+        "FOUNDRY maybe_run_foundry_turn: done live=%s source=%s trigger=%s error=%s",
         live,
         raw.get("source"),
+        trigger,
         (raw.get("error") or "")[:160] or None,
     )
+
+    if will_intercept:
+        return {
+            "status": "error" if hard_fail else "success",
+            "message": _format_chat_message(raw),
+            "foundry": True,
+            "foundry_source": raw.get("source"),
+            "foundry_plan": raw.get("plan"),
+            "foundry_trace_tags": raw.get("trace_tags"),
+            "foundry_tracing_enabled": raw.get("tracing_enabled"),
+            "foundry_agents_ensured": raw.get("agents_ensured"),
+            "foundry_workflow": raw.get("workflow"),
+            "foundry_live": live,
+            "foundry_model": raw.get("model"),
+            "foundry_error": raw.get("error"),
+            "foundry_app_insights": raw.get("app_insights_enabled"),
+        }
+
+    logger.info(
+        "FOUNDRY maybe_run_foundry_turn: traced trigger=%s live=%s; keeping Chat reply",
+        trigger,
+        live,
+    )
+    return None
+
+
+def notify_foundry_generation(
+    *,
+    kind: str,
+    prompt: str,
+    language: str | None = None,
+) -> dict[str, Any] | None:
+    """Standalone generate_image / generate_audio API → Foundry Traces (async by default)."""
+    kind_l = (kind or "").strip().lower()
+    if kind_l not in ("image", "audio"):
+        return None
+    if not foundry_orchestration_enabled():
+        logger.info("FOUNDRY notify_foundry_generation: skipped (orchestration disabled)")
+        return None
+    label = "GENERATE_IMAGE" if kind_l == "image" else "GENERATE_AUDIO"
+    agent = "ignite-image-agent" if kind_l == "image" else "ignite-audio-agent"
+    trigger = f"chat_generate_{kind_l}"
+    text = (
+        f"{(prompt or '').strip()}\n"
+        f"[intent={label} modality={kind_l} agent={agent}]"
+    )
+    logger.info("FOUNDRY notify_foundry_generation: kind=%s trigger=%s", kind_l, trigger)
+    if _trace_async_enabled():
+        _spawn_foundry_trace(text, language=language, trigger=trigger)
+        return {
+            "status": "accepted",
+            "foundry": True,
+            "foundry_trigger": trigger,
+            "foundry_async": True,
+        }
+    try:
+        raw = run_foundry_turn(text, language=language, trigger=trigger)
+    except Exception as exc:
+        logger.warning("FOUNDRY notify_foundry_generation failed: %s", exc)
+        return {"status": "error", "foundry": True, "message": str(exc)}
     return {
-        "status": "error" if hard_fail else "success",
-        "message": _format_chat_message(raw),
+        "status": "success" if raw.get("live") or not raw.get("error") else "error",
         "foundry": True,
-        "foundry_source": raw.get("source"),
+        "foundry_trigger": trigger,
         "foundry_plan": raw.get("plan"),
         "foundry_trace_tags": raw.get("trace_tags"),
-        "foundry_tracing_enabled": raw.get("tracing_enabled"),
-        "foundry_agents_ensured": raw.get("agents_ensured"),
-        "foundry_workflow": raw.get("workflow"),
-        "foundry_live": live,
-        "foundry_model": raw.get("model"),
-        "foundry_error": raw.get("error"),
-        "foundry_app_insights": raw.get("app_insights_enabled"),
+        "foundry_live": bool(raw.get("live")),
     }
 
 
