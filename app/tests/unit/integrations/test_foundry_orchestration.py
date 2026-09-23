@@ -36,10 +36,32 @@ class TestFoundryOrchestrationGodPath(unittest.TestCase):
         cls.runtime = _load("foundry_runtime_god", RUNTIME_PATH)
 
     def setUp(self):
-        os.environ["FOUNDRY_ORCHESTRATION_ENABLED"] = "true"
-        os.environ.pop("PROJECT_CONNECTION_STRING", None)
         self.runtime._READY = False
         self.runtime._TRACING_READY = False
+        self.orch._STATUS_LOGGED = False
+        # Block live Foundry/.env from flipping unit tests into Azure calls.
+        self._env_patch = patch.dict(
+            os.environ,
+            {
+                "FOUNDRY_ORCHESTRATION_ENABLED": "true",
+                "FOUNDRY_USE_IGNITE_API": "false",
+                "FOUNDRY_BRAIN_LIVE": "false",
+                "FOUNDRY_WORKFLOW_LIVE": "false",
+                "FOUNDRY_TRACE_ASYNC": "false",  # sync in unit tests
+                "MODEL_DEPLOYMENT_NAME": "gemini-2.5-flash",
+                "PROJECT_CONNECTION_STRING": "",
+                "APPLICATIONINSIGHTS_CONNECTION_STRING": "",
+            },
+            clear=False,
+        )
+        self._env_patch.start()
+        self._load_env_patch = patch.object(self.orch, "_load_foundry_env", lambda: None)
+        self._load_env_patch.start()
+
+    def tearDown(self):
+        self._load_env_patch.stop()
+        self._env_patch.stop()
+        self.orch._STATUS_LOGGED = False
 
     def test_chat_turn_offline_surfaces_error(self):
         out = self.orch.maybe_run_foundry_turn("Extrae DOC-001", language="es")
@@ -79,15 +101,18 @@ class TestFoundryOrchestrationGodPath(unittest.TestCase):
 
     def test_auto_enabled_when_project_set(self):
         self.orch._STATUS_LOGGED = False
-        os.environ["FOUNDRY_ORCHESTRATION_ENABLED"] = "false"
-        os.environ["PROJECT_CONNECTION_STRING"] = (
-            "https://example.services.ai.azure.com/api/projects/x"
-        )
-        try:
+        with patch.dict(
+            os.environ,
+            {
+                "FOUNDRY_ORCHESTRATION_ENABLED": "false",
+                "PROJECT_CONNECTION_STRING": (
+                    "https://example.services.ai.azure.com/api/projects/x"
+                ),
+            },
+            clear=False,
+        ):
             self.assertTrue(self.orch.foundry_orchestration_enabled())
-        finally:
-            os.environ.pop("PROJECT_CONNECTION_STRING", None)
-            self.orch._STATUS_LOGGED = False
+        self.orch._STATUS_LOGGED = False
 
     def test_canonical_specialists(self):
         from agent_names import all_prompt_agents, specialist_for_media_id, specialist_for_modality
@@ -171,6 +196,149 @@ class TestFoundryOrchestrationGodPath(unittest.TestCase):
         self.assertTrue(result["live"])
         self.assertEqual(result["message"], "workflow-ok")
         self.assertIn("path:workflow", result["trace_tags"])
+
+    def test_should_handle_mic_without_files_or_extract_hints(self):
+        """After STT, Voice_Message is stripped — from_mic alone must still hit Foundry."""
+        self.assertTrue(
+            self.orch.should_handle_turn("Hola, ¿cómo estás?", from_mic=True)
+        )
+        # Contest default: every Chat turn is in scope when orchestration is on.
+        self.assertTrue(
+            self.orch.should_handle_turn("Hola, ¿cómo estás?", from_mic=False)
+        )
+        with patch.dict(os.environ, {"FOUNDRY_ORCHESTRATION_ALWAYS": "false"}, clear=False):
+            self.assertFalse(
+                self.orch.should_handle_turn("Hola, ¿cómo estás?", from_mic=False)
+            )
+            self.assertTrue(
+                self.orch.should_handle_turn(
+                    "",
+                    [{"name": "Voice_Message_10-00.webm", "mime_type": "audio/webm"}],
+                )
+            )
+            self.assertTrue(
+                self.orch.should_handle_turn("Genera una imagen de un gato")
+            )
+
+    def test_casual_mic_traces_but_keeps_provider_reply(self):
+        """Mic chat must arm Traces (chat_mic) without stealing the TTS bubble."""
+        calls = {"n": 0}
+
+        def fake_run(text, files=None, *, language=None, trigger="chat"):
+            calls["n"] += 1
+            calls["trigger"] = trigger
+            calls["text"] = text
+            return {
+                "live": True,
+                "source": "foundry_workflow",
+                "message": "foundry-mic",
+                "plan": {"modality": "audio", "intent": "ANSWER", "steps": []},
+                "trace_tags": [f"trigger:{trigger}", "modality:audio"],
+                "tracing_enabled": True,
+                "error": None,
+                "model": "gemini-2.5-flash",
+            }
+
+        with patch.object(self.orch, "run_foundry_turn", side_effect=fake_run):
+            out = self.orch.maybe_run_foundry_turn(
+                "Hola, cuéntame un chiste", language="es", from_mic=True
+            )
+        self.assertIsNone(out)  # keep provider LLM + TTS
+        self.assertEqual(calls["n"], 1)
+        self.assertEqual(calls["trigger"], "chat_mic")
+        self.assertIn("channel=audio", calls["text"])
+        self.assertIn("from_mic=true", calls["text"])
+
+    def test_generate_image_traces_keeps_chat_bytes(self):
+        calls = {"n": 0}
+
+        def fake_run(text, files=None, *, language=None, trigger="chat"):
+            calls["n"] += 1
+            calls["trigger"] = trigger
+            calls["text"] = text
+            return {
+                "live": True,
+                "source": "foundry_workflow",
+                "message": "planned",
+                "plan": {"modality": "image", "intent": "GENERATE_IMAGE", "steps": []},
+                "trace_tags": [f"trigger:{trigger}"],
+                "tracing_enabled": True,
+                "error": None,
+                "model": "gemini-2.5-flash",
+            }
+
+        with patch.object(self.orch, "run_foundry_turn", side_effect=fake_run):
+            out = self.orch.maybe_run_foundry_turn(
+                "Genera una imagen de un atardecer", language="es"
+            )
+        self.assertIsNone(out)  # Chat still generates image bytes
+        self.assertEqual(calls["trigger"], "chat_generate_image")
+        self.assertIn("GENERATE_IMAGE", calls["text"])
+
+    def test_notify_foundry_generation_audio(self):
+        with patch.object(
+            self.orch,
+            "run_foundry_turn",
+            return_value={
+                "live": True,
+                "plan": {"intent": "GENERATE_AUDIO"},
+                "trace_tags": ["trigger:chat_generate_audio"],
+                "error": None,
+            },
+        ) as mocked:
+            out = self.orch.notify_foundry_generation(
+                kind="audio", prompt="Crea un sonido de lluvia"
+            )
+        self.assertIsNotNone(out)
+        self.assertTrue(out["foundry"])
+        self.assertEqual(out["foundry_trigger"], "chat_generate_audio")
+        mocked.assert_called_once()
+
+    def test_non_intercept_can_spawn_async_trace(self):
+        spawned = {"n": 0}
+
+        def fake_spawn(*_a, **_k):
+            spawned["n"] += 1
+
+        with patch.dict(os.environ, {"FOUNDRY_TRACE_ASYNC": "true"}, clear=False), patch.object(
+            self.orch, "_spawn_foundry_trace", side_effect=fake_spawn
+        ), patch.object(self.orch, "run_foundry_turn") as run_mock:
+            out = self.orch.maybe_run_foundry_turn(
+                "Genera una imagen de un perro", language="es"
+            )
+        self.assertIsNone(out)
+        self.assertEqual(spawned["n"], 1)
+        run_mock.assert_not_called()
+
+    def test_mic_extract_still_intercepts_bubble(self):
+        """Spoken 'Extrae DOC-001' still returns Foundry footer (Architect demo)."""
+        with patch.object(
+            self.orch,
+            "run_foundry_turn",
+            return_value={
+                "live": False,
+                "source": "offline",
+                "message": "plan-ok",
+                "plan": {
+                    "modality": "document",
+                    "intent": "EXTRACT",
+                    "steps": [{"action": "inspect_document", "agent": "ignite-document-agent"}],
+                },
+                "trace_tags": ["trigger:chat_mic"],
+                "tracing_enabled": False,
+                "error": "NO LLEGÓ A FOUNDRY (offline test)",
+                "model": "gemini-2.5-flash",
+                "trigger": "chat_mic",
+            },
+        ):
+            out = self.orch.maybe_run_foundry_turn(
+                "Extrae DOC-001", language="es", from_mic=True
+            )
+        self.assertIsNotNone(out)
+        self.assertTrue(out["foundry"])
+        self.assertEqual(out.get("foundry_plan", {}).get("intent"), "EXTRACT")
+        self.assertIn("Foundry orchestration", out["message"])
+        self.assertIn("trigger:chat_mic", " ".join(out.get("foundry_trace_tags") or []))
 
 
 if __name__ == "__main__":

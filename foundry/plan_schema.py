@@ -10,18 +10,38 @@ import re
 from typing import Any
 
 VALID_MODALITIES = frozenset({"text", "document", "image", "audio", "video"})
-VALID_INTENTS = frozenset({"EXTRACT", "ANSWER", "EXPORT", "CLARIFY", "MEDIA_DESCRIBE"})
-VALID_ACTIONS = frozenset({"inspect_document", "describe_media", "synthesize", "clarify", "export_office"})
+VALID_INTENTS = frozenset(
+    {
+        "EXTRACT",
+        "ANSWER",
+        "EXPORT",
+        "CLARIFY",
+        "MEDIA_DESCRIBE",
+        "GENERATE_IMAGE",
+        "GENERATE_AUDIO",
+    }
+)
+VALID_ACTIONS = frozenset(
+    {
+        "inspect_document",
+        "describe_media",
+        "synthesize",
+        "clarify",
+        "export_office",
+        "generate_image",
+        "generate_audio",
+    }
+)
 
 PLAN_JSON_SCHEMA_HINT = """
 Return ONLY one JSON object (no markdown fences) with this shape:
 {
   "modality": "text|document|image|audio|video",
-  "intent": "EXTRACT|ANSWER|EXPORT|CLARIFY|MEDIA_DESCRIBE",
+  "intent": "EXTRACT|ANSWER|EXPORT|CLARIFY|MEDIA_DESCRIBE|GENERATE_IMAGE|GENERATE_AUDIO",
   "doc_id": "DOC-001 or null",
   "media_id": "MED-001 or null",
   "steps": [
-    {"action": "inspect_document|describe_media|synthesize|clarify|export_office",
+    {"action": "inspect_document|describe_media|synthesize|clarify|export_office|generate_image|generate_audio",
      "agent": "ignite-document-agent|ignite-image-agent|ignite-audio-agent|ignite-video-agent|ignite-orchestrator-agent",
      "args": {}}
   ],
@@ -125,6 +145,24 @@ def validate_plan(plan: dict[str, Any]) -> dict[str, Any]:
             ]
         elif intent == "EXPORT":
             steps = [{"action": "export_office", "agent": "ignite-orchestrator-agent", "args": {}}]
+        elif intent == "GENERATE_IMAGE":
+            steps = [
+                {
+                    "action": "generate_image",
+                    "agent": "ignite-image-agent",
+                    "args": {},
+                },
+                {"action": "synthesize", "agent": "ignite-orchestrator-agent", "args": {}},
+            ]
+        elif intent == "GENERATE_AUDIO":
+            steps = [
+                {
+                    "action": "generate_audio",
+                    "agent": "ignite-audio-agent",
+                    "args": {},
+                },
+                {"action": "synthesize", "agent": "ignite-orchestrator-agent", "args": {}},
+            ]
         else:
             steps = [{"action": "clarify", "agent": "ignite-orchestrator-agent", "args": {}}]
 

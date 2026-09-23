@@ -23,6 +23,8 @@ Estado: `OPEN` | `DONE` | `DEFERRED` | `BLOCKED`
 | **STD-009** | Persistencia JSON (Cosmos / Postgres / …) | DEFERRED | Mostrar historia en BD JSON-capable — **dejar en paz** hasta pedido explícito |
 | **STD-010** | Modelo Gemini primero | OPEN | `MODEL_DEPLOYMENT_NAME=gemini-2.5-flash` salvo que el usuario pida otro |
 | **STD-011** | Fallo loud si no llega a Foundry | OPEN | Sin `PROJECT_CONNECTION_STRING` → `NO LLEGÓ A FOUNDRY` en burbuja + logs `FOUNDRY ...` |
+| **STD-012** | Mic / nota de voz también en Traces | OPEN | `from_mic` o `Voice_Message_*` → `maybe_run_foundry_turn(..., from_mic=True)` → trigger `chat_mic` + tags `channel=audio`. Tras STT el audio se quita de `processed_files`; **no** depender solo de `files`. Chat casual mic: trazar y **conservar** reply del provider/TTS; extract hablado (`Extrae DOC-001`) sí intercepta footer. |
+| **STD-014** | Todo turno Chat → Foundry (gen imagen/audio + chat) | OPEN | Con orquestación ON, **cada** turno arma Traces/workflow (`FOUNDRY_ORCHESTRATION_ALWAYS` default true). `GENERATE_IMAGE` → `ignite-image-agent` (trigger `chat_generate_image`); `GENERATE_AUDIO` → `ignite-audio-agent`. Chat **emite bytes**; Foundry **planifica y rastrea**. Solo extract/doc intercepta burbuja. Turnos no-intercept: `FOUNDRY_TRACE_ASYNC=true` (default) para no congelar la UI en video. |
 | **STD-013** | Diagnóstico: ¿repo correcto? | OPEN | Al arrancar Agent-a-thon debe verse `FOUNDRY BOOT` y el banner del `run_app.bat`. Si el log solo tiene Gemini→Ignite API sin `FOUNDRY`, estás en **producto IgniteChat** (no este snapshot) |
 
 ---
@@ -49,6 +51,9 @@ Se ejecuta en **ambos** caminos del snapshot Agent-a-thon (no remotes de product
 | Trigger | Hook | Qué pasa |
 | --- | --- | --- |
 | Solo Chat (`Extrae DOC-001`, adjunta imagen, “analiza…”) | `maybe_run_foundry_turn` → `run_traced_orchestration` | Traces ON → **ensure** → workflow |
+| Mic / nota de voz (`from_mic`, `Voice_Message_*`) | `maybe_run_foundry_turn(..., from_mic=True)` → trigger `chat_mic` | Tras STT el webm ya no está en `files`; el flag `from_mic` **debe** bastar. Casual → traza y sigue LLM; extract hablado → footer Foundry |
+| Generar imagen / audio | `chat_generate_image` / `chat_generate_audio` (+ `notify_foundry_generation`) | Plan `GENERATE_*` → image/audio agent; **bytes en Chat** |
+| Cualquier otro turno (STD-014) | `maybe_run_foundry_turn` (ALWAYS default) | Traces + workflow; reply del provider |
 | Chat → Ignite API extract | `notify_foundry_after_extract` → mismo `run_traced_orchestration` | Tras extract OK → **ensure** → workflow |
 
 `ensure_agents_and_workflow()` **siempre re-lista** el proyecto. Si borraste agentes en el portal, el próximo turno los vuelve a crear (doc/image/audio/video + orch + workflow).
@@ -81,7 +86,8 @@ Agentes **segregados** (STD-004): nunca un media genérico.
 
 ## Cómo usar esta cola en cada turno de agente
 
-1. Leer STD-001…012 antes de editar.
+1. Leer STD-001…014 antes de editar.
 2. Si el usuario cambia un acuerdo → actualizar fila + estado aquí **en el mismo PR**.
 3. No implementar STD-009 sin pedido explícito.
 4. No “arreglar” IgniteChat/API aunque el log de extract se vea en producto.
+5. Antes de grabar video: [DEMO_VIDEO_CHECKLIST.md](DEMO_VIDEO_CHECKLIST.md).

@@ -142,6 +142,7 @@ from backend.integrations.foundry_orchestration import (
     foundry_orchestration_enabled,
     maybe_run_foundry_turn,
     notify_foundry_after_extract,
+    notify_foundry_generation,
 )
 
 
@@ -3494,6 +3495,15 @@ class PyWebViewApi:
                         and hasattr(first_chat, "generate_image")
                     ):
                         logger.info(f"Group image fast-path via {trans_provider}: {text[:120]}...")
+                        try:
+                            notify_foundry_generation(
+                                kind="image", prompt=text or "", language=language
+                            )
+                        except Exception as foundry_err:
+                            logger.warning(
+                                "FOUNDRY notify group generate_image failed: %s",
+                                foundry_err,
+                            )
                         is_spanish = language and str(language).startswith("es")
                         img_bytes, mime, err, token_info_img = first_chat.generate_image(text)
                         if self._is_request_cancelled(request_id):
@@ -4102,9 +4112,9 @@ class PyWebViewApi:
         )
 
         # Contest / Architect path: Ignite turn → Foundry Traces + Plan/Workflow brain.
-        # Off by default (FOUNDRY_ORCHESTRATION_ENABLED). Does not replace product Chat repos.
+        # On when FOUNDRY_ORCHESTRATION_ENABLED or PROJECT_CONNECTION_STRING is set.
         foundry_out = maybe_run_foundry_turn(
-            text, processed_files, language=language
+            text, processed_files, language=language, from_mic=from_mic
         )
         if foundry_out is not None:
             reply = foundry_out.get("message") or ""
@@ -4492,6 +4502,11 @@ class PyWebViewApi:
     def generate_image(self, prompt):
         provider = self._current_provider
         chat = self._chat_instances.get(provider)
+        # Architect: plan + Traces in Foundry; Chat still emits image bytes.
+        try:
+            notify_foundry_generation(kind="image", prompt=prompt or "")
+        except Exception as foundry_err:
+            logger.warning("FOUNDRY notify after generate_image failed: %s", foundry_err)
         if hasattr(chat, 'generate_image'):
             try:
                 img_bytes, mime, err, token_info = chat.generate_image(prompt)
@@ -4513,6 +4528,10 @@ class PyWebViewApi:
     def generate_audio(self, prompt):
         provider = self._current_provider
         chat = self._chat_instances.get(provider)
+        try:
+            notify_foundry_generation(kind="audio", prompt=prompt or "")
+        except Exception as foundry_err:
+            logger.warning("FOUNDRY notify after generate_audio failed: %s", foundry_err)
         if hasattr(chat, 'generate_audio'):
             try:
                 audio_bytes, mime, err, token_info, script = chat.generate_audio(prompt)

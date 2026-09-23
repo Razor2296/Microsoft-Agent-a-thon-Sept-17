@@ -11,12 +11,15 @@
 
 1. Abrir el snapshot Agent-a-thon (no el producto IgniteChat “limpio” sin Foundry).
 2. Consola debe mostrar `FOUNDRY BOOT` al arrancar.
-3. `app/.env`: `FOUNDRY_ORCHESTRATION_ENABLED=true`, `REPLACE_CHAT=false`, `FOUNDRY_CARE_DIGEST=true`.
-4. Tener listos:
-   - PDF tesis / documento con logos chicos (demo Grok opcional),
+3. `foundry/.env` + `app/.env`: `FOUNDRY_ORCHESTRATION_ENABLED=true`, `PROJECT_CONNECTION_STRING` del proyecto, `MODEL_DEPLOYMENT_NAME=gemini-2.5-flash`.
+4. Checklist completo: [`.agents/skills/foundry-paso3/references/DEMO_VIDEO_CHECKLIST.md`](../.agents/skills/foundry-paso3/references/DEMO_VIDEO_CHECKLIST.md).
+5. Tener listos:
+   - Fixture `DOC-001` / PDF de prueba,
    - foto de **receta médica**,
    - portal Foundry → Agents + Traces ya abiertos.
-5. Provider en UI: Gemini o Grok (el que uses en vivo).
+6. Provider en UI: Gemini (preferido concurso).
+
+**Nota:** extract/doc puede mostrar footer Foundry en la burbuja. Mic / generar imagen-audio: Chat ejecuta; Foundry rastrea en Traces (`chat_mic`, `chat_generate_*`).
 
 ---
 
@@ -34,10 +37,9 @@
 
 *(Slide o dibujo mental en pantalla: Chat → API → Foundry.)*
 
-> “Dos agentes, un loop:  
-> **Ignite Chat** conversa, rutea tools, RAG y voz.  
+> “**Ignite Chat** conversa, rutea tools, RAG y voz.  
 > **Ignite API** solo extrae multimodal en Azure Container Apps.  
-> **Foundry** (`juliancuray-7914`) es el plano de agentes + Traces — **no secuestra** la burbuja del chat.”
+> **Foundry** (`juliancuray-7914`) es el plano de agentes + Traces: planifica y observa; Chat ejecuta la UX.”
 
 Criterios que vamos a tocar: **Innovation · Usability · Impact** + Level 3: **design · observability · evals · multi-agent**.
 
@@ -133,6 +135,6 @@ Consola útil: líneas `FOUNDRY ` / create-if-missing.
 
 ## Frases que NO decir
 
-- “Foundry responde en la burbuja” (falso con `REPLACE_CHAT=false`).
+- “Foundry responde siempre en la burbuja” (solo extract/doc; mic/gen dejan el reply del Chat).
 - “Esto es solo el lab de FrontierWeekHack copiado.”
 - “Ignite API vive en este mismo repo” (es remoto público aparte).
